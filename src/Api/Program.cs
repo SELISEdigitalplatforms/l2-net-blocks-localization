@@ -5,7 +5,7 @@ const string _serviceName = "blocks-localization-api";
 var blocksSecret = await ApplicationConfigurations.ConfigureLogAndSecretsAsync(_serviceName);
 var builder = WebApplication.CreateBuilder(args);
 
-ApplicationConfigurations.ConfigureAppConfigs(builder, args);
+ApplicationConfigurations.ConfigureApiEnv(builder, args);
 var services = builder.Services;
 
 builder.Services.RegisterApplicationServices();

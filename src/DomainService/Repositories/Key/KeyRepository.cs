@@ -29,13 +29,11 @@ namespace DomainService.Repositories
 
             var sort = !string.IsNullOrWhiteSpace(query.SortProperty) && query.IsDescending ? Builders<Key>.Sort.Descending(query.SortProperty) : Builders<Key>.Sort.Ascending(query.SortProperty ?? "KeyName");
 
-            var command = async () => await collection
+            return await collection
                                         .Find(filter)
                                         .Skip(query.PageNumber*query.PageSize)
                                         .Sort(sort)
                                         .ToListAsync();
-
-            return await _dbContextProvider.RunMongoCommandWithActivityAsync(_collectionName, "Find", command);
         }
 
         private static FilterDefinition<Key> getAllKeysFilter(GetKeysQuery query)
@@ -94,8 +92,7 @@ namespace DomainService.Repositories
 
             var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, KeyName);
 
-            var command = async () => await collection.Find(filter).FirstOrDefaultAsync();
-            return await _dbContextProvider.RunMongoCommandWithActivityAsync(_collectionName, "Find", command);
+            return await collection.Find(filter).FirstOrDefaultAsync();
         }
 
         public async Task SaveKeyAsync(BlocksLanguageKey key)
@@ -105,12 +102,10 @@ namespace DomainService.Repositories
 
             var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, key.KeyName);
 
-            var command = async () => await collection.ReplaceOneAsync(
+            await collection.ReplaceOneAsync(
                 filter,
                 key,
                 new ReplaceOptions { IsUpsert = true });
-
-            await _dbContextProvider.RunMongoCommandWithActivityAsync(_collectionName, "Save", command);
         }
     }
 }
