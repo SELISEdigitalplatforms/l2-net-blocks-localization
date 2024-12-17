@@ -24,17 +24,13 @@ namespace DomainService.Repositories
             var collection = dataBase.GetCollection<BlocksLanguageModule>(_collectionName);
 
             var filter = Builders<BlocksLanguageModule>.Filter.Eq(mc => mc.ModuleName, name);
-            var command = async () => await collection.Find(filter).FirstOrDefaultAsync();
-
-            return await _dbContextProvider.RunMongoCommandWithActivityAsync(_collectionName, "Find", command);
+            return await collection.Find(filter).FirstOrDefaultAsync();
         }
 
         public async Task<List<Module>> GetAllAsync()
         {
             var collection = _dbContextProvider.GetCollection<Module>(_collectionName);
-            var command = async () => await collection.Find(_ => true).ToListAsync();
-
-            return await _dbContextProvider.RunMongoCommandWithActivityAsync(_collectionName, "Find", command);
+            return await collection.Find(_ => true).ToListAsync();
         }
 
         public async Task SaveAsync(BlocksLanguageModule module)
@@ -44,13 +40,11 @@ namespace DomainService.Repositories
 
             var filter = Builders<BlocksLanguageModule>.Filter.Eq(mc => mc.ModuleName, module.ModuleName);
 
-            var command = async () => await collection.ReplaceOneAsync(
+            await collection.ReplaceOneAsync(
                 filter,
                 module,
                 new ReplaceOptions { IsUpsert = true }
             );
-
-            await _dbContextProvider.RunMongoCommandWithActivityAsync(_collectionName, "Save", command);
 
         }
     }
