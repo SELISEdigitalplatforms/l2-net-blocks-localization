@@ -47,7 +47,7 @@ namespace DomainService.Services
 
         private async Task<BlocksLanguageKey> MappedIntoRepoKeyAsync(Key key)
         {
-            var repoKey = await _keyRepository.GetKeyByNameAsync(key.KeyName);
+            var repoKey = await _keyRepository.GetKeyByNameAsync(key.KeyName, key.ModuleId);
 
             if (repoKey == null)
                 repoKey = new BlocksLanguageKey { ItemId = new Guid().ToString(), CreateDate = DateTime.UtcNow, TenantId = _tenantId };

@@ -2,11 +2,6 @@
 using DomainService.Services;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace DomainService.Repositories
 {
@@ -59,7 +54,7 @@ namespace DomainService.Repositories
             {
                 matchFilters.Add(filterBuilder.In(x => x.ModuleId, query.ModuleIds));
             }
-            
+
             if (query.CreateDateRange != null)
             {
                 List<FilterDefinition<Key>> dateFilters = setDateFilter(query, filterBuilder);
@@ -68,7 +63,7 @@ namespace DomainService.Repositories
                     matchFilters.Add(filterBuilder.And(dateFilters));
                 }
             }
-            return matchFilters.Count > 0 ? filterBuilder.And(matchFilters): filterBuilder.Empty;
+            return matchFilters.Count > 0 ? filterBuilder.And(matchFilters) : filterBuilder.Empty;
         }
 
         private static List<FilterDefinition<Key>> setDateFilter(GetKeysRequest query, FilterDefinitionBuilder<Key> filterBuilder)
@@ -97,12 +92,13 @@ namespace DomainService.Repositories
             return dateFilters;
         }
 
-        public async Task<BlocksLanguageKey> GetKeyByNameAsync(string KeyName)
+        public async Task<BlocksLanguageKey> GetKeyByNameAsync(string KeyName, string moduleId)
         {
             var dataBase = _dbContextProvider.GetDatabase(_tenantId);
             var collection = dataBase.GetCollection<BlocksLanguageKey>(_collectionName);
 
-            var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, KeyName);
+            var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, KeyName) &
+                     Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.ModuleId, moduleId);
 
             return await collection.Find(filter).FirstOrDefaultAsync();
         }
