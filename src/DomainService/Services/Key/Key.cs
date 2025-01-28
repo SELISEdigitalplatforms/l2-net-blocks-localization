@@ -6,6 +6,8 @@ namespace DomainService.Services
     [BsonIgnoreExtraElements]
     public class Key : IProjectKey
     {
+        [BsonId]
+        public string ItemId { get; set; }
         public string KeyName { get; set; }
         public string ModuleId { get; set; }
         public string Value { get; set; }

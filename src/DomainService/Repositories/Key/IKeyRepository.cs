@@ -10,7 +10,7 @@ namespace DomainService.Repositories
     public interface IKeyRepository
     {
         Task SaveKeyAsync(BlocksLanguageKey key);
-        Task<BlocksLanguageKey> GetKeyByNameAsync(string KeyName);
+        Task<BlocksLanguageKey> GetKeyByNameAsync(string KeyName, string moduleId);
         Task<GetKeysQueryResponse> GetAllKeysAsync(GetKeysRequest query);
     }
 }
