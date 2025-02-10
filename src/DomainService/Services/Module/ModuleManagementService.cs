@@ -55,7 +55,7 @@ namespace DomainService.Services
 
             if (repoModule == null)
             {
-                repoModule = new BlocksLanguageModule { ItemId = new Guid().ToString(), CreateDate = DateTime.UtcNow, TenantId = _tenantId };
+                repoModule = new BlocksLanguageModule { ItemId = Guid.NewGuid().ToString(), CreateDate = DateTime.UtcNow, TenantId = _tenantId };
             }
 
             repoModule.ModuleName = module.ModuleName;
