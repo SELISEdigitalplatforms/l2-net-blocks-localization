@@ -50,7 +50,7 @@ namespace DomainService.Services
             var repoKey = await _keyRepository.GetKeyByNameAsync(key.KeyName, key.ModuleId);
 
             if (repoKey == null)
-                repoKey = new BlocksLanguageKey { ItemId = new Guid().ToString(), CreateDate = DateTime.UtcNow, TenantId = _tenantId };
+                repoKey = new BlocksLanguageKey { ItemId = Guid.NewGuid().ToString(), CreateDate = DateTime.UtcNow, TenantId = _tenantId };
 
             repoKey.LastUpdateDate = DateTime.UtcNow;
             repoKey.KeyName = key.KeyName;

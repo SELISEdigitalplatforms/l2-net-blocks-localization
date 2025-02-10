@@ -12,7 +12,6 @@ namespace DomainService.Repositories
     public class LanguageRepository : ILanguageRepository
     {
         private readonly IDbContextProvider _dbContextProvider;
-        private readonly string _tenantId = BlocksContext.GetContext()?.TenantId ?? "";
         private const string _collectionName = "BlocksLanguages";
 
         public LanguageRepository(IDbContextProvider dbContextProvider)
@@ -22,14 +21,15 @@ namespace DomainService.Repositories
 
         public async Task<List<Language>> GetAllLanguagesAsync()
         {
-            var collection = _dbContextProvider.GetCollection<Language>(_collectionName);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            var collection = dataBase.GetCollection<Language>(_collectionName);
 
             return await collection.Find(_ => true).ToListAsync();
         }
 
         public async Task<BlocksLanguage> GetLanguageByNameAsync(string languageName)
         {
-            var dataBase = _dbContextProvider.GetDatabase(_tenantId);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
             var collection = dataBase.GetCollection<BlocksLanguage>(_collectionName);
 
             var filter = Builders<BlocksLanguage>.Filter.Eq(mc => mc.LanguageName, languageName);
@@ -39,7 +39,7 @@ namespace DomainService.Repositories
 
         public async Task SaveAsync(BlocksLanguage language)
         {
-            var dataBase = _dbContextProvider.GetDatabase(_tenantId);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
             var collection = dataBase.GetCollection<BlocksLanguage>(_collectionName);
 
             var filter = Builders<BlocksLanguage>.Filter.And(

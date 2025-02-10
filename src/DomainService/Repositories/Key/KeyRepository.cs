@@ -8,7 +8,6 @@ namespace DomainService.Repositories
     public class KeyRepository : IKeyRepository
     {
         private readonly IDbContextProvider _dbContextProvider;
-        private readonly string _tenantId = BlocksContext.GetContext()?.TenantId ?? "";
         private const string _collectionName = "BlocksLanguageKeys";
 
         public KeyRepository(IDbContextProvider dbContextProvider)
@@ -18,7 +17,8 @@ namespace DomainService.Repositories
 
         public async Task<GetKeysQueryResponse> GetAllKeysAsync(GetKeysRequest request)
         {
-            var collection = _dbContextProvider.GetCollection<Key>(_collectionName);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            var collection = dataBase.GetCollection<Key>(_collectionName);
 
             var filter = getAllKeysFilter(request);
 
@@ -94,7 +94,7 @@ namespace DomainService.Repositories
 
         public async Task<BlocksLanguageKey> GetKeyByNameAsync(string KeyName, string moduleId)
         {
-            var dataBase = _dbContextProvider.GetDatabase(_tenantId);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
             var collection = dataBase.GetCollection<BlocksLanguageKey>(_collectionName);
 
             var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, KeyName) &
@@ -105,7 +105,7 @@ namespace DomainService.Repositories
 
         public async Task SaveKeyAsync(BlocksLanguageKey key)
         {
-            var dataBase = _dbContextProvider.GetDatabase(_tenantId);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
             var collection = dataBase.GetCollection<BlocksLanguageKey>(_collectionName);
 
             var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, key.KeyName);

@@ -10,7 +10,6 @@ namespace DomainService.Repositories
     public class ModuleRepository : IModuleRepository
     {
         private readonly IDbContextProvider _dbContextProvider;
-        private readonly string _tenantId = BlocksContext.GetContext()?.TenantId ?? "";
         private const string _collectionName = "BlocksLanguageModules";
 
         public ModuleRepository(IDbContextProvider dbContextProvider)
@@ -20,7 +19,7 @@ namespace DomainService.Repositories
 
         public async Task<BlocksLanguageModule> GetByNameAsync(string name)
         {
-            var dataBase = _dbContextProvider.GetDatabase(_tenantId);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId?? "");
             var collection = dataBase.GetCollection<BlocksLanguageModule>(_collectionName);
 
             var filter = Builders<BlocksLanguageModule>.Filter.Eq(mc => mc.ModuleName, name);
@@ -35,7 +34,7 @@ namespace DomainService.Repositories
 
         public async Task SaveAsync(BlocksLanguageModule module)
         {
-            var dataBase = _dbContextProvider.GetDatabase(_tenantId);
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
             var collection = dataBase.GetCollection<BlocksLanguageModule>(_collectionName);
 
             var filter = Builders<BlocksLanguageModule>.Filter.Eq(mc => mc.ModuleName, module.ModuleName);
