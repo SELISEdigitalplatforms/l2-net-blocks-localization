@@ -1,11 +1,15 @@
 ﻿using Blocks.Genesis;
 
-namespace DomainService.Services.Assistant
+namespace DomainService.Services
 {
-    public class AiCompletionRequest : IProjectKey
+    public class AiCompletionRequest
     {
         public string Message { get; set; }
         public double Temperature { get; set; }
-        public string? ProjectKey { get; set; }
+        public AiCompletionRequest(string message, double temperature) 
+        { 
+            Message = message;
+            Temperature = temperature;
+        }
     }
 }
