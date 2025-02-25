@@ -52,7 +52,14 @@ namespace DomainService.Repositories
             }
             if (query.ModuleIds != null && query.ModuleIds.Length > 0)
             {
-                matchFilters.Add(filterBuilder.In(x => x.ModuleId, query.ModuleIds));
+                if (query.ModuleIds.Length == 1 && !string.IsNullOrWhiteSpace(query.ModuleIds[0]))
+                {
+                    matchFilters.Add(filterBuilder.Eq(x => x.ModuleId, query.ModuleIds[0]));
+                }
+                else if(query.ModuleIds.Length > 1)
+                {
+                    matchFilters.Add(filterBuilder.In(x => x.ModuleId, query.ModuleIds));
+                }
             }
 
             if (query.CreateDateRange != null)
