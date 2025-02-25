@@ -1,4 +1,5 @@
 ﻿using Blocks.Genesis;
+using DomainService.Repositories;
 using DomainService.Services;
 using DomainService.Shared;
 using Microsoft.AspNetCore.Authorization;
@@ -48,6 +49,7 @@ namespace Api.Controllers
             return await _moduleManagementService.SaveModuleAsync(module);
         }
 
+
         /// <summary>
         /// Retrieves a list of all available modules.
         /// </summary>
@@ -55,7 +57,7 @@ namespace Api.Controllers
         
         [HttpGet]
         [Authorize]
-        public async Task<List<Module>> Gets([FromQuery]GetModulesQuery query)
+        public async Task<List<BlocksLanguageModule>> Gets([FromQuery]GetModulesQuery query)
         {
             if (query == null) BadRequest(new BaseMutationResponse());
             _changeControllerContext.ChangeContext(query);

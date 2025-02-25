@@ -60,5 +60,28 @@ namespace Api.Controllers
             _changeControllerContext.ChangeContext(request);
             return await _languageManagementService.GetLanguagesAsync();
         }
+
+        //[HttpDelete]
+        //[Authorize]
+        //public async Task<IActionResult> Delete([FromQuery] DeleteLanguageRequest request)
+        //{
+        //    if (request == null) BadRequest(new BaseMutationResponse());
+        //    _changeControllerContext.ChangeContext(request);
+
+        //    if (string.IsNullOrWhiteSpace(request.ItemId))
+        //    {
+        //        return BadRequest(new BaseMutationResponse
+        //        {
+        //            IsSuccess = false,
+        //            Errors = new Dictionary<string, string>
+        //            {
+        //                { "ConfigurationId", "Invalid or missing ConfigurationId" }
+        //            }
+        //        });
+        //    }
+
+        //    var result = await _mailConfigurationService.DeleteAsysnc(request);
+        //    return result.IsSuccess ? Ok(result) : BadRequest(result);
+        //}
     }
 }

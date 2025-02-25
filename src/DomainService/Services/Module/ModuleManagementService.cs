@@ -44,7 +44,7 @@ namespace DomainService.Services
             return new ApiResponse();
         }
 
-        public async Task<List<Module>> GetModulesAsync()
+        public async Task<List<BlocksLanguageModule>> GetModulesAsync()
         {
             return await _moduleRepository.GetAllAsync();
         }

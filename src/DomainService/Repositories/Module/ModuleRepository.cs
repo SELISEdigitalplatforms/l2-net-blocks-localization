@@ -26,9 +26,9 @@ namespace DomainService.Repositories
             return await collection.Find(filter).FirstOrDefaultAsync();
         }
 
-        public async Task<List<Module>> GetAllAsync()
+        public async Task<List<BlocksLanguageModule>> GetAllAsync()
         {
-            var collection = _dbContextProvider.GetCollection<Module>(_collectionName);
+            var collection = _dbContextProvider.GetCollection<BlocksLanguageModule>(_collectionName);
             return await collection.Find(_ => true).ToListAsync();
         }
 
