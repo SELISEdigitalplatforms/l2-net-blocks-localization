@@ -92,6 +92,29 @@ namespace Api.Controllers
             return result;
         }
 
+        [HttpDelete]
+        [Authorize]
+        public async Task<IActionResult> Delete([FromQuery] DeleteKeyRequest request)
+        {
+            if (request == null) BadRequest(new BaseMutationResponse());
+            _changeControllerContext.ChangeContext(request);
+
+            if (string.IsNullOrWhiteSpace(request.ItemId))
+            {
+                return BadRequest(new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "ItemId", "Invalid or missing ConfigurationId" }
+                    }
+                });
+            }
+
+            var result = await _keyManagementService.DeleteAsysnc(request);
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
+        }
+
         [HttpGet]
         public async Task GetUilmFile([FromQuery] GetUilmFileRequest request)
         {

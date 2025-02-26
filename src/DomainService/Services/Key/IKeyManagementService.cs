@@ -1,4 +1,5 @@
-﻿using DomainService.Shared;
+﻿using Blocks.Genesis;
+using DomainService.Shared;
 using DomainService.Shared.Events;
 using System;
 using System.Collections.Generic;
@@ -15,5 +16,6 @@ namespace DomainService.Services
         Task<bool> GenerateAsync(GenerateUilmFilesEvent command);
         Task<string> GetUilmFile(GetUilmFileRequest request);
         Task<Key?> GetAsync(GetKeyRequest request);
+        Task<BaseMutationResponse> DeleteAsysnc(DeleteKeyRequest request);
     }
 }

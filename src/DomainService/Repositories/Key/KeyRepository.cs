@@ -181,5 +181,14 @@ namespace DomainService.Repositories
                 .Project(project)
                 .FirstOrDefaultAsync();
         }
+
+        public async Task DeleteAsync(string itemId)
+        {
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            var collection = dataBase.GetCollection<BlocksLanguageKey>(_collectionName);
+            var filter = Builders<BlocksLanguageKey>.Filter.Eq(lk => lk.ItemId, itemId);
+
+            await collection.DeleteOneAsync(filter);
+        }
     }
 }

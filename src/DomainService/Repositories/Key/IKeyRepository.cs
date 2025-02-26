@@ -12,5 +12,6 @@ namespace DomainService.Repositories
         Task<long> DeleteOldUilmFiles(List<UilmFile> uilmfiles);
         Task<UilmFile> GetUilmFile(GetUilmFileRequest request);
         Task<Key> GetByIdAsync(string itemId);
+        Task DeleteAsync(string itemId);
     }
 }

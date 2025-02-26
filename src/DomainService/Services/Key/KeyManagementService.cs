@@ -81,6 +81,31 @@ namespace DomainService.Services
             return key;
         }
 
+        public async Task<BaseMutationResponse> DeleteAsysnc(DeleteKeyRequest request)
+        {
+            _logger.LogInformation("Deleting Key start");
+
+            var key = await _keyRepository.GetByIdAsync(request.ItemId);
+            if (key == null)
+            {
+                _logger.LogInformation("Deleting Key end -- Key not found");
+
+                return new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "ItemId", "Key not found" }
+                    }
+                };
+            }
+
+            await _keyRepository.DeleteAsync(request.ItemId);
+
+            _logger.LogInformation("Deleting Key end -- Success");
+            return new BaseMutationResponse { IsSuccess = true };
+        }
+
         public async Task<bool> GenerateAsync(GenerateUilmFilesEvent command)
         {
             _logger.LogInformation("++ Started JsonOutputGeneratorService: GenerateAsync()...");
