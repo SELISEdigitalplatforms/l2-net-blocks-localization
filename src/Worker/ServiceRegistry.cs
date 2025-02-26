@@ -13,8 +13,15 @@ namespace Worker
         public static void RegisterApplicationServices(this IServiceCollection services)
         {
 
-
             services.AddSingleton<IConsumer<GenerateUilmFilesEvent>, GenerateUilmFilesConsumer>();
+
+            services.AddSingleton<IModuleManagementService, ModuleManagementService>();
+            services.AddSingleton<IModuleRepository, ModuleRepository>();
+            services.AddSingleton<IValidator<Module>, ModuleValidator>();
+
+            services.AddSingleton<ILanguageManagementService, LanguageManagementService>();
+            services.AddSingleton<ILanguageRepository, LanguageRepository>();
+            services.AddSingleton<IValidator<Language>, LanguageValidator>();
 
             services.AddSingleton<IKeyManagementService, KeyManagementService>();
             services.AddSingleton<IKeyRepository, KeyRepository>();
