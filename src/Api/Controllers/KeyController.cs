@@ -22,7 +22,7 @@ namespace Api.Controllers
     {
         private readonly IKeyManagementService _keyManagementService;
         private readonly ChangeControllerContext _changeControllerContext;
-        private readonly IMessageClient _messageClient;
+        
 
         /// <summary>
         /// Initializes a new instance of the <see cref="KeyController"/> class.
@@ -31,12 +31,10 @@ namespace Api.Controllers
 
         public KeyController(
             IKeyManagementService keyManagementService,
-            ChangeControllerContext changeControllerContext,
-            IMessageClient messageClient)
+            ChangeControllerContext changeControllerContext)
         {
             _keyManagementService = keyManagementService;
             _changeControllerContext = changeControllerContext;
-            _messageClient = messageClient;
         }
 
         /// <summary>
@@ -134,30 +132,16 @@ namespace Api.Controllers
 
         [HttpPost]
         [Authorize]
-        public Task<IActionResult> GenerateUilmFile([FromBody] GenerateUilmFilesRequest request)
+        public async Task<IActionResult> GenerateUilmFile([FromBody] GenerateUilmFilesRequest request)
         {
             //if (request == null) return BadRequest();
-            if(request == null) return Task.FromResult<IActionResult>(BadRequest());
+            if (request == null) return BadRequest(new BaseMutationResponse());
             _changeControllerContext.ChangeContext(request);
-            var result = SendEvent(request);
-            return Task.FromResult<IActionResult>(Ok(result));
+            await _keyManagementService.SendEvent(request);
+            return Ok(new BaseMutationResponse { IsSuccess = true });
         }
 
-        private async Task SendEvent(GenerateUilmFilesRequest request)
-        {
-            await _messageClient.SendToConsumerAsync(
-                new ConsumerMessage<GenerateUilmFilesEvent>
-                {
-                    ConsumerName = Constants.UilmQueue,
-                    Payload = new GenerateUilmFilesEvent
-                    {
-                        Guid = request.Guid,
-                        ProjectKey = request.ProjectKey,
-                        ModuleId = request.ModuleId
-                    }
-                }
-            );
-        }
+        
 
     }
 }

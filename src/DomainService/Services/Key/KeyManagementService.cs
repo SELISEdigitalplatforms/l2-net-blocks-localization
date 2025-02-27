@@ -2,6 +2,7 @@
 using DomainService.Repositories;
 using DomainService.Shared;
 using DomainService.Shared.Events;
+using DomainService.Utilities;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -16,6 +17,7 @@ namespace DomainService.Services
         private readonly ILogger<KeyManagementService> _logger;
         private readonly ILanguageManagementService _languageManagementService;
         private readonly IModuleManagementService _moduleManagementService;
+        private readonly IMessageClient _messageClient;
 
         private readonly string _tenantId = BlocksContext.GetContext()?.TenantId ?? "";
 
@@ -24,13 +26,15 @@ namespace DomainService.Services
             IValidator<Key> validator,
             ILogger<KeyManagementService> logger,
             ILanguageManagementService languageManagementService,
-            IModuleManagementService moduleManagementService)
+            IModuleManagementService moduleManagementService,
+            IMessageClient messageClient)
         {
             _keyRepository = keyRepository;
             _validator = validator;
             _logger = logger;
             _languageManagementService = languageManagementService;
             _moduleManagementService = moduleManagementService;
+            _messageClient = messageClient;
         }
 
         public async Task<ApiResponse> SaveKeyAsync(Key key)
@@ -214,6 +218,22 @@ namespace DomainService.Services
         {
             var uilmFile =  await _keyRepository.GetUilmFile(request);
             return uilmFile?.Content;
+        }
+
+        public async Task SendEvent(GenerateUilmFilesRequest request)
+        {
+            await _messageClient.SendToConsumerAsync(
+                new ConsumerMessage<GenerateUilmFilesEvent>
+                {
+                    ConsumerName = Constants.UilmQueue,
+                    Payload = new GenerateUilmFilesEvent
+                    {
+                        Guid = request.Guid,
+                        ProjectKey = request.ProjectKey,
+                        ModuleId = request.ModuleId
+                    }
+                }
+            );
         }
     }
 }
