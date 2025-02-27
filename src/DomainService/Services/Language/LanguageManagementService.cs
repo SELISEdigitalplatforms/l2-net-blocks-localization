@@ -48,7 +48,30 @@ namespace DomainService.Services
         {
             return await _languageRepository.GetAllLanguagesAsync();
         }
+        public async Task<BaseMutationResponse> DeleteAsysnc(DeleteLanguageRequest request)
+        {
+            _logger.LogInformation("Deleting language start");
 
+            var key = await _languageRepository.GetLanguageByNameAsync(request.LanguageName);
+            if (key == null)
+            {
+                _logger.LogInformation("Deleting language end -- language not found");
+
+                return new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "ItemId", "language not found" }
+                    }
+                };
+            }
+
+            await _languageRepository.DeleteAsync(request.LanguageName);
+
+            _logger.LogInformation("Deleting language end -- Success");
+            return new BaseMutationResponse { IsSuccess = true };
+        }
         private async Task<BlocksLanguage> MappedIntoRepoLanguageAsync(Language language)
         {
             var repoLanguage = await _languageRepository.GetLanguageByNameAsync(language.LanguageName);

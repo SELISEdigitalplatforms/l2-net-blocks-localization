@@ -32,6 +32,15 @@ namespace DomainService.Repositories
             return await collection.Find(filter).FirstOrDefaultAsync();
         }
 
+        public async Task DeleteAsync(string languageName)
+        {
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            var collection = dataBase.GetCollection<BlocksLanguage>(_collectionName);
+            var filter = Builders<BlocksLanguage>.Filter.Eq(lk => lk.LanguageName, languageName);
+
+            await collection.DeleteOneAsync(filter);
+        }
+
         public async Task SaveAsync(BlocksLanguage language)
         {
             var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");

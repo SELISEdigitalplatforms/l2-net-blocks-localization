@@ -1,11 +1,6 @@
 ﻿using Blocks.Genesis;
 using DomainService.Shared;
 using DomainService.Shared.Events;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace DomainService.Services
 {

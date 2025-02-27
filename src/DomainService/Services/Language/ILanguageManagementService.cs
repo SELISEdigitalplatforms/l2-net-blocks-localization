@@ -1,4 +1,5 @@
-﻿using DomainService.Shared;
+﻿using Blocks.Genesis;
+using DomainService.Shared;
 
 namespace DomainService.Services
 {
@@ -6,5 +7,6 @@ namespace DomainService.Services
     {
         Task<ApiResponse> SaveLanguageAsync(Language language);
         Task<List<Language>> GetLanguagesAsync();
+        Task<BaseMutationResponse> DeleteAsysnc(DeleteLanguageRequest request);
     }
 }

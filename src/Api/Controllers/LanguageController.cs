@@ -61,27 +61,27 @@ namespace Api.Controllers
             return await _languageManagementService.GetLanguagesAsync();
         }
 
-        //[HttpDelete]
-        //[Authorize]
-        //public async Task<IActionResult> Delete([FromQuery] DeleteLanguageRequest request)
-        //{
-        //    if (request == null) BadRequest(new BaseMutationResponse());
-        //    _changeControllerContext.ChangeContext(request);
+        [HttpDelete]
+        [Authorize]
+        public async Task<IActionResult> Delete([FromQuery] DeleteLanguageRequest request)
+        {
+            if (request == null) BadRequest(new BaseMutationResponse());
+            _changeControllerContext.ChangeContext(request);
 
-        //    if (string.IsNullOrWhiteSpace(request.ItemId))
-        //    {
-        //        return BadRequest(new BaseMutationResponse
-        //        {
-        //            IsSuccess = false,
-        //            Errors = new Dictionary<string, string>
-        //            {
-        //                { "ConfigurationId", "Invalid or missing ConfigurationId" }
-        //            }
-        //        });
-        //    }
+            if (string.IsNullOrWhiteSpace(request.LanguageName))
+            {
+                return BadRequest(new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "LanguageName", "Invalid or missing LanguageName" }
+                    }
+                });
+            }
 
-        //    var result = await _mailConfigurationService.DeleteAsysnc(request);
-        //    return result.IsSuccess ? Ok(result) : BadRequest(result);
-        //}
+            var result = await _languageManagementService.DeleteAsysnc(request);
+            return result.IsSuccess ? Ok(result) : BadRequest(result);
+        }
     }
 }
