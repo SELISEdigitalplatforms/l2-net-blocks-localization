@@ -73,6 +73,7 @@ namespace DomainService.Services
             repoKey.ModuleId = key.ModuleId;
             repoKey.Resources = key.Resources;
             repoKey.IsPartiallyTranslated = key.IsPartiallyTranslated;
+            repoKey.Routes = key.Routes;
 
             return repoKey;
         }
