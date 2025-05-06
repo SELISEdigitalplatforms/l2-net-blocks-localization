@@ -14,6 +14,7 @@ namespace DomainService.Services
         public List<string>? Routes { get; set; }
         public bool IsPartiallyTranslated { get; set; }
         public DateTime LastUpdateDate { get; set; }
+        public DateTime CreateDate { get; set; }
         public string? ProjectKey { get; set; }
     }
 }
