@@ -71,10 +71,14 @@ namespace DomainService.Repositories
         {
             var filterBuilder = Builders<Key>.Filter;
             var matchFilters = new List<FilterDefinition<Key>>();
+
             if (!string.IsNullOrWhiteSpace(query.KeySearchText))
             {
-                matchFilters.Add(filterBuilder.Regex("KeyName", new BsonRegularExpression($".*{query.KeySearchText}.*", "i")));
+                var keyNameFilter = filterBuilder.Regex("KeyName", new BsonRegularExpression($".*{query.KeySearchText}.*", "i"));
+                var resourcesValueFilter = filterBuilder.ElemMatch(x => x.Resources, resource => resource.Value.ToLower().Contains(query.KeySearchText.ToLower()));
+                matchFilters.Add(filterBuilder.Or(keyNameFilter, resourcesValueFilter));
             }
+
             if (query.ModuleIds != null && query.ModuleIds.Length > 0)
             {
                 if (query.ModuleIds.Length == 1 && !string.IsNullOrWhiteSpace(query.ModuleIds[0]))
@@ -140,7 +144,8 @@ namespace DomainService.Repositories
             var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
             var collection = dataBase.GetCollection<BlocksLanguageKey>(_collectionName);
 
-            var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, key.KeyName);
+            var filter = Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.KeyName, key.KeyName) &
+                         Builders<BlocksLanguageKey>.Filter.Eq(mc => mc.ModuleId, key.ModuleId);
 
             await collection.ReplaceOneAsync(
                 filter,

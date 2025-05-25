@@ -1,16 +1,10 @@
-
-//var builder = Host.CreateApplicationBuilder(args);
-
-//var host = builder.Build();
-//host.Run();
-
-
 using Blocks.Genesis;
+using DomainService.Utilities;
 using Worker;
 
 const string _serviceName = "blocks-localization-worker";
 
-await ApplicationConfigurations.ConfigureLogAndSecretsAsync(_serviceName);
+await ApplicationConfigurations.ConfigureLogAndSecretsAsync(_serviceName, VaultType.Azure);
 
 await CreateHostBuilder(args).Build().RunAsync();
 
@@ -22,9 +16,8 @@ IHostBuilder CreateHostBuilder(string[] args) =>
         })
         .ConfigureServices(async (services) =>
         {
-            ApplicationConfigurations.ConfigureServices(services, DomainService.Utilities.Constants.GetMessageConfiguration());
+            //ApplicationConfigurations.ConfigureServices(services, DomainService.Utilities.Constants.GetMessageConfiguration());
             services.AddHttpClient();
-
             services.RegisterApplicationServices();
-            ApplicationConfigurations.ConfigureWorker(services);
+            ApplicationConfigurations.ConfigureWorker(services, Constants.GetMessageConfiguration());
         });
