@@ -53,7 +53,6 @@ namespace Api.Controllers
         /// <returns>A list of <see cref="Language"/> objects.</returns>
         
         [HttpGet]
-        [Authorize]
         public async Task<List<Language>> Gets([FromQuery] GetLanguagesRequest request)
         {
             if (request == null) BadRequest(new BaseMutationResponse());
