@@ -56,7 +56,6 @@ namespace Api.Controllers
         /// <returns>A list of <see cref="Module"/> objects.</returns>
         
         [HttpGet]
-        [Authorize]
         public async Task<List<BlocksLanguageModule>> Gets([FromQuery]GetModulesQuery query)
         {
             if (query == null) BadRequest(new BaseMutationResponse());
