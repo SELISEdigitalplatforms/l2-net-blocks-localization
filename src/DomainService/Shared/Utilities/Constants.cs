@@ -9,8 +9,11 @@ namespace DomainService.Utilities
         {
             return new MessageConfiguration
             {
-                Queues = new List<string> { UilmQueue },
-                Topics = new List<string> { }
+                AzureServiceBusConfiguration = new AzureServiceBusConfiguration
+                {
+                    Queues = [Constants.UilmQueue],
+                    Topics = []
+                }
             };
         } 
     }

@@ -1,25 +1,19 @@
 using Api;
 using Blocks.Genesis;
+using DomainService.Utilities;
 
 const string _serviceName = "blocks-localization-api";
-var blocksSecret = await ApplicationConfigurations.ConfigureLogAndSecretsAsync(_serviceName);
+var blocksSecret = await ApplicationConfigurations.ConfigureLogAndSecretsAsync(_serviceName, VaultType.Azure);
 var builder = WebApplication.CreateBuilder(args);
 
 ApplicationConfigurations.ConfigureApiEnv(builder, args);
 var services = builder.Services;
 
+services.AddHealthChecks();
 builder.Services.RegisterApplicationServices();
-
-ApplicationConfigurations.ConfigureServices(services, new MessageConfiguration
-{
-     Queues = new List<string> { },
-     Topics = new List<string> { }
-});
-
+ApplicationConfigurations.ConfigureServices(services, Constants.GetMessageConfiguration());
 ApplicationConfigurations.ConfigureApi(services);
 
 var app = builder.Build();
-
 ApplicationConfigurations.ConfigureMiddleware(app);
-
 await app.RunAsync();
