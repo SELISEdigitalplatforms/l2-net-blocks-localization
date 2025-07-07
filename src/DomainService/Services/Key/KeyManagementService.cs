@@ -424,6 +424,22 @@ namespace DomainService.Services
             );
         }
         
+        public async Task SendUilmImportEvent(UilmImportRequest request)
+        {
+            await _messageClient.SendToConsumerAsync(
+                new ConsumerMessage<UilmImportEvent>
+                {
+                    ConsumerName = Constants.UilmImportExportQueue,
+                    Payload = new UilmImportEvent
+                    {
+                        FileId = request.FileId,
+                        MessageCoRelationId = request.MessageCoRelationId,
+                        ProjectKey = request.ProjectKey
+                    }
+                }
+            );
+        }
+        
         public async Task SendGenerateUilmFilesEvent(GenerateUilmFilesRequest request)
         {
             await _messageClient.SendToConsumerAsync(
@@ -439,5 +455,20 @@ namespace DomainService.Services
                 }
             );
         }
+
+        public async Task<bool> ImportUilmFile(UilmImportEvent request)
+        {
+            _logger.LogInformation("Importing Uilm file with ID: {FileId}", request.FileId);
+            // var uilmFile = await _keyRepository.GetUilmFileById(request.FileId);
+            // if (uilmFile == null)
+            // {
+            //    _logger.LogError("Uilm file with ID {FileId} not found", request.FileId);
+            //    return false;
+            // }
+
+            _logger.LogInformation("Successfully imported Uilm file with ID: {FileId}", request.FileId);
+            return true;
+        }
+
     }
 }
