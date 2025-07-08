@@ -477,21 +477,21 @@ namespace DomainService.Services
                 _format = "XLSX";
                 return await ImportExcelFile(stream, fileData);
             }
-            else if (fileData.Name.EndsWith(".json"))
-            {
-                _format = "JSON";
-                return await ImportJsonFile(stream, fileData);
-            }
-            else if (fileData.Name.EndsWith(".csv"))
-            {
-                _format = "CSV";
-                return await ImportCsvFile(stream, fileData);
-            }
-            else if (fileData.Name.EndsWith(".xlf"))
-            {
-                _format = "XLF";
-                return await ImportXlfFile(stream, fileData);
-            }
+            //else if (fileData.Name.EndsWith(".json"))
+            //{
+            //    _format = "JSON";
+            //    return await ImportJsonFile(stream, fileData);
+            //}
+            //else if (fileData.Name.EndsWith(".csv"))
+            //{
+            //    _format = "CSV";
+            //    return await ImportCsvFile(stream, fileData);
+            //}
+            //else if (fileData.Name.EndsWith(".xlf"))
+            //{
+            //    _format = "XLF";
+            //    return await ImportXlfFile(stream, fileData);
+            //}
 
             return false;
         }
@@ -601,10 +601,12 @@ namespace DomainService.Services
         private async Task ProcessExcelCells(IXLWorksheet worksheet, Dictionary<string, string> columns, Dictionary<string, string> languages,
             List<BlocksLanguageKey> uilmResourceKeys)
         {
-            var dbApplications = await GetLanguageApplications(null);
+            //List<Language> languageSetting = await _languageManagementService.GetLanguagesAsync();
 
-            var uilmApplicationsToBeInserted = new List<UilmApplication>();
-            var uilmApplicationsToBeUpdated = new List<UilmApplication>();
+            List<BlocksLanguageModule> dbApplications = await _moduleManagementService.GetModulesAsync();
+
+            var uilmApplicationsToBeInserted = new List<BlocksLanguageModule>();
+            var uilmApplicationsToBeUpdated = new List<BlocksLanguageModule>();
 
             var resourceKeysWithoutId = new List<BlocksLanguageKey>();
             var cultures = languages.Where(x => !x.Key.Contains("_CharacterLength")).ToDictionary(x => x.Key, y => y.Value);
@@ -613,32 +615,31 @@ namespace DomainService.Services
 
             _logger.LogInformation("ImportExcelFile: {Excelrows} UilmResourceKeys Found!", excelRows - 1);
 
-            var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
-            var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
-
+            //var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
+            //var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
+            
             for (int i = 2; i <= excelRows; i++)
             {
-                string id = worksheet.Cell(i, columns["id"]).Value.ToString();
-                string appId = worksheet.Cell(i, columns["app id"]).Value.ToString();
-                string appName = worksheet.Cell(i, columns["app"]).Value.ToString();
-                string keyName = worksheet.Cell(i, columns["key"]).Value.ToString();
-                string moduleName = worksheet.Cell(i, columns["module"]).Value.ToString();
-                string type = worksheet.Cell(i, columns["type"]).Value.ToString();
+                string id = worksheet.Cell(i, columns["ItemId"]).Value.ToString();
+                string moduleId = worksheet.Cell(i, columns["ModuleId"]).Value.ToString();
+                string moduleName = worksheet.Cell(i, columns["Module"]).Value.ToString();
+                string keyName = worksheet.Cell(i, columns["KeyName"]).Value.ToString();
+                //string moduleName = worksheet.Cell(i, columns["module"]).Value.ToString();
+                //string type = worksheet.Cell(i, columns["type"]).Value.ToString();
 
-                var uilmAppTimeLine = GetBlocksLanguageManagerTimeline();
+                //var uilmAppTimeLine = GetBlocksLanguageManagerTimeline();
 
-                appId = HandleUilmApplication(dbApplications, uilmApplicationsToBeInserted, uilmApplicationsToBeUpdated, appId, appName, moduleName,
+                moduleId = HandleUilmApplication(dbApplications, uilmApplicationsToBeInserted, uilmApplicationsToBeUpdated, moduleId, moduleName, moduleName,
                             uilmAppTimeLine);
 
-                uilmAppTimeLines.Add(uilmAppTimeLine);
+                //uilmAppTimeLines.Add(uilmAppTimeLine);
 
                 BlocksLanguageKey uilmResourceKey = new()
                 {
-                    Id = id,
-                    AppId = appId,
+                    ItemId = id,
+                    ModuleId = moduleId,
                     KeyName = keyName,
-                    ModifiedDate = DateTime.UtcNow,
-                    Type = type,
+                    LastUpdateDate = DateTime.UtcNow,
                 };
 
                 uilmResourceKey.Resources = new Resource[cultures.Count];
@@ -650,10 +651,10 @@ namespace DomainService.Services
                     int characterLength = 0;
 
                     var key = lang.Key + "_CharacterLength";
-                    if (lang.Key != defaultLanguage && languages.ContainsKey(key))
-                    {
-                        characterLength = AssignCharacterLengthValue(worksheet, languages, i, key);
-                    }
+                    //if (lang.Key != defaultLanguage && languages.ContainsKey(key))
+                    //{
+                    //    characterLength = AssignCharacterLengthValue(worksheet, languages, i, key);
+                    //}
 
                     uilmResourceKey.Resources[j++] = (new Resource() { Culture = lang.Key, Value = resourceValue, CharacterLength = characterLength });
                 }
@@ -662,7 +663,7 @@ namespace DomainService.Services
 
                 var olduilmResourceKey = await GetUilmResourceKey(uilmResourceKey.AppId, uilmResourceKey.KeyName);
 
-                uilmResourceKey.Id = string.IsNullOrWhiteSpace(uilmResourceKey.Id) ? Guid.NewGuid().ToString() : uilmResourceKey.Id;
+                uilmResourceKey.ItemId = string.IsNullOrWhiteSpace(uilmResourceKey.ItemId) ? Guid.NewGuid().ToString() : uilmResourceKey.ItemId;
 
                 if (olduilmResourceKey == null)
                 {
@@ -670,19 +671,34 @@ namespace DomainService.Services
                 }
                 else
                 {
-                    uilmResourceKey.Id = string.IsNullOrWhiteSpace(olduilmResourceKey.Id) ? uilmResourceKey.Id : olduilmResourceKey.Id;
+                    uilmResourceKey.ItemId = string.IsNullOrWhiteSpace(olduilmResourceKey.ItemId) ? uilmResourceKey.ItemId : olduilmResourceKey.ItemId;
                     uilmResourceKeys.Add(uilmResourceKey);
                 }
 
-                FormatUilmResouceKeyTimeline(uilmResourceKeyTimeLine, olduilmResourceKey, uilmResourceKey);
-                uilmResourceKeyTimeLines.Add(uilmResourceKeyTimeLine);
+                //FormatUilmResouceKeyTimeline(uilmResourceKeyTimeLine, olduilmResourceKey, uilmResourceKey);
+                //uilmResourceKeyTimeLines.Add(uilmResourceKeyTimeLine);
             }
 
             await SaveUilmResourceKey(uilmResourceKeys, resourceKeysWithoutId);
             await SaveUilmApplication(uilmApplicationsToBeInserted.DistinctBy(x => x.ModuleName).ToList(), uilmApplicationsToBeUpdated.DistinctBy(x => x.ModuleName).ToList());
 
-            uilmResourceKeyTimeLines?.AddRange(uilmAppTimeLines?.DistinctBy(x => x.CurrentData?.UilmApplication?.ModuleName)?.ToList());
-            await _uilmRepository.SaveBlocksLanguageManagerTimeLines(uilmResourceKeyTimeLines);
+            //uilmResourceKeyTimeLines?.AddRange(uilmAppTimeLines?.DistinctBy(x => x.CurrentData?.UilmApplication?.ModuleName)?.ToList());
+            //await _uilmRepository.SaveBlocksLanguageManagerTimeLines(uilmResourceKeyTimeLines);
+        }
+
+        private string HandleUilmApplication(List<BlocksLanguageModule> dbApplications, List<BlocksLanguageModule> uilmApplicationsToBeInserted,
+            List<BlocksLanguageModule> uilmApplicationsToBeUpdated, string appId, string appName, string moduleName, BlocksLanguageManagerTimeline uilmAppTimeLine)
+        {
+            if (string.IsNullOrWhiteSpace(appId))
+            {
+                appId = HandleApplicationWithoutAppId(dbApplications, uilmApplicationsToBeInserted, uilmApplicationsToBeUpdated, appName, moduleName, uilmAppTimeLine);
+            }
+            else
+            {
+                HandleApplicationWithAppId(dbApplications, uilmApplicationsToBeInserted, uilmApplicationsToBeUpdated, appId, appName, moduleName, uilmAppTimeLine);
+            }
+
+            return appId;
         }
 
     }
