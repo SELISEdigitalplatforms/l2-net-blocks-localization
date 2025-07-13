@@ -1,6 +1,11 @@
 ﻿using Blocks.Genesis;
+using ClosedXML.Excel;
+using CsvHelper;
+using CsvHelper.Configuration;
 using DomainService.Repositories;
 using DomainService.Shared;
+using DomainService.Shared.DTOs;
+using DomainService.Shared.Entities;
 using DomainService.Shared.Events;
 using DomainService.Storage;
 using FluentValidation;
@@ -8,7 +13,7 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Newtonsoft.Json;
 using StorageDriver;
-using ClosedXML.Excel;
+using System.Globalization;
 
 namespace DomainService.Services
 {
@@ -24,6 +29,7 @@ namespace DomainService.Services
         private readonly IStorageDriverService _storageDriverService;
 
         private readonly string _tenantId = BlocksContext.GetContext()?.TenantId ?? "";
+        private BaseBlocksCommand _blocksBaseCommand;
         private string _format;
 
         public KeyManagementService(
@@ -295,7 +301,7 @@ namespace DomainService.Services
 
         public async Task UpdateResourceKey(List<BlocksLanguageKey> resourceKeys, TranslateAllEvent request)
         {
-            var updateCount = await _keyRepository.UpdateUilmResourceKeysForChangeAll(resourceKeys);
+            var updateCount = await _keyRepository.UpdateUilmResourceKeysForChangeAll(resourceKeys, null, false, null);
 
             //await _languageManagementRepository.UpdateUilmResourceKeysTimelineForChangeAll(resourceKeyTimelines);
 
@@ -467,7 +473,7 @@ namespace DomainService.Services
         {
             _logger.LogInformation("Importing Uilm file with ID: {FileId}", request.FileId);
             var (fileData, stream) = await GetFileStream(request.FileId, request.ProjectKey);
-             if (fileData == null)
+            if (fileData == null)
             {
                 _logger.LogError("Uilm file with ID {FileId} not found", request.FileId);
                 return false;
@@ -477,16 +483,16 @@ namespace DomainService.Services
                 _format = "XLSX";
                 return await ImportExcelFile(stream, fileData);
             }
-            //else if (fileData.Name.EndsWith(".json"))
-            //{
-            //    _format = "JSON";
-            //    return await ImportJsonFile(stream, fileData);
-            //}
-            //else if (fileData.Name.EndsWith(".csv"))
-            //{
-            //    _format = "CSV";
-            //    return await ImportCsvFile(stream, fileData);
-            //}
+            else if (fileData.Name.EndsWith(".json"))
+            {
+                _format = "JSON";
+                return await ImportJsonFile(stream, fileData);
+            }
+            else if (fileData.Name.EndsWith(".csv"))
+            {
+                _format = "CSV";
+                return await ImportCsvFile(stream, fileData);
+            }
             //else if (fileData.Name.EndsWith(".xlf"))
             //{
             //    _format = "XLF";
@@ -495,6 +501,229 @@ namespace DomainService.Services
 
             return false;
         }
+
+        private async Task<bool> ImportCsvFile(Stream stream, FileResponse fileData)
+        {
+            try
+            {
+                var languageJsonModels = ExtractModelsFromCsv(stream);
+                var dbApplications = await GetLanguageApplications(null);
+                await ProcessJsonFile(dbApplications, languageJsonModels);
+
+                _logger.LogInformation("ImportCsvFile: Successfully imported FileId:{id}, FileName: {name}", fileData.ItemId, fileData.Name);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("ImportCsvFile: Failed to import FileId:{id}, FileName: {name}, Error: {ex}", fileData.ItemId, fileData.Name, ex);
+                return false;
+            }
+        }
+
+        private static List<LanguageJsonModel> ExtractModelsFromCsv(Stream stream)
+        {
+            var memoryStream = stream as MemoryStream;
+            var dataStream = new MemoryStream();
+            dataStream.Write(memoryStream.ToArray(), 0, (memoryStream.ToArray()).Length);
+            dataStream.Seek(0, SeekOrigin.Begin);
+
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                Delimiter = ",",
+                HasHeaderRecord = true
+            };
+
+            using (var reader = new StreamReader(dataStream))
+            {
+                using (var csv = new CsvReader(reader, config))
+                {
+                    csv.Read();
+                    csv.ReadHeader();
+
+                    var firstRow = csv.Parser.RawRecord;
+                    var fields = firstRow.Split(',');
+
+                    var cultures = new Dictionary<string, string>();
+
+                    for (int i = 6; i < fields.Length; i++)
+                    {
+                        if (fields[i].Contains("_CharacterLength"))
+                        {
+                            continue;
+                        }
+
+                        cultures.Add(fields[i].Trim(), fields[i + 1].Trim());
+                    }
+
+                    var languageJsonModels = new List<LanguageJsonModel>();
+
+                    while (csv.Read())
+                    {
+                        var languageJsonModel = new LanguageJsonModel
+                        {
+                            Id = csv.GetField<string>("Id"),
+                            AppId = csv.GetField<string>("AppId"),
+                            Type = csv.GetField<string>("Type"),
+                            App = csv.GetField<string>("App"),
+                            Module = csv.GetField<string>("Module"),
+                            Key = csv.GetField<string>("Key")
+                        };
+
+                        var resources = new List<Resource>();
+
+                        foreach (var culture in cultures)
+                        {
+                            var resource = new Resource();
+                            resource.Culture = culture.Key;
+                            resource.Value = csv.GetField<string>(culture.Key);
+                            resource.CharacterLength = string.IsNullOrEmpty(culture.Value) ? 0 : csv.GetField<int>(culture.Value);
+
+                            resources.Add(resource);
+                        }
+
+                        languageJsonModel.Resources = resources.ToArray();
+
+                        languageJsonModels.Add(languageJsonModel);
+                    }
+
+                    return languageJsonModels;
+                }
+            }
+        }
+
+        private async Task<bool> ImportJsonFile(Stream stream, FileResponse fileData)
+        {
+            try
+            {
+                var languageJsonModels = ExtractModelsFromJson(stream);
+                var dbApplications = await GetLanguageApplications(null);
+                await ProcessJsonFile(dbApplications, languageJsonModels);
+
+                _logger.LogInformation("ImportJsonFile: Successfully imported FileId:{id}, FileName: {name}", fileData.ItemId, fileData.Name);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("ImportJsonFile: Failed to import FileId:{id}, FileName: {name}, Error: {ex}", fileData.ItemId, fileData.Name, ex);
+                return false;
+            }
+        }
+
+        private async Task ProcessJsonFile(List<BlocksLanguageModule> dbApplications, List<LanguageJsonModel> languageJsonModels)
+        {
+            var uilmApplicationsToBeInserted = new List<BlocksLanguageModule>();
+            var uilmApplicationsToBeUpdated = new List<BlocksLanguageModule>();
+
+            var resourceKeysWithoutId = new List<BlocksLanguageKey>();
+            var uilmResourceKeys = new List<BlocksLanguageKey>();
+
+            var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
+            var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
+
+            foreach (var languageJsonModel in languageJsonModels)
+            {
+                var id = languageJsonModel.Id;
+                var appId = languageJsonModel.AppId;
+                var appName = languageJsonModel.App;
+                var moduleName = languageJsonModel.Module;
+                var keyName = languageJsonModel.Key;
+                var type = languageJsonModel.Type;
+
+                var uilmAppTimeLine = GetBlocksLanguageManagerTimeline();
+
+                appId = HandleUilmApplication(dbApplications, uilmApplicationsToBeInserted, uilmApplicationsToBeUpdated, appId, appName,
+                    moduleName, uilmAppTimeLine);
+
+                uilmAppTimeLines.Add(uilmAppTimeLine);
+
+                BlocksLanguageKey uilmResourceKey = new()
+                {
+                    KeyName = keyName,
+                    Resources = languageJsonModel.Resources,
+                    ItemId = id,
+                    ModuleId = appId
+                };
+
+                var uilmResourceKeyTimeLine = GetBlocksLanguageManagerTimeline();
+                var olduilmResourceKey = await GetUilmResourceKey(uilmResourceKey.ModuleId, uilmResourceKey.KeyName);
+
+                uilmResourceKey.ItemId = string.IsNullOrWhiteSpace(uilmResourceKey.ItemId) ? Guid.NewGuid().ToString() : uilmResourceKey.ItemId;
+
+                if (olduilmResourceKey == null)
+                {
+                    resourceKeysWithoutId.Add(uilmResourceKey);
+                }
+                else
+                {
+                    uilmResourceKeys.Add(uilmResourceKey);
+                }
+                //FormatUilmResouceKeyTimeline(uilmResourceKeyTimeLine, olduilmResourceKey, uilmResourceKey);
+                uilmResourceKeyTimeLines.Add(uilmResourceKeyTimeLine);
+            }
+
+            await SaveUilmResourceKey(uilmResourceKeys, resourceKeysWithoutId);
+
+            var validUilmApplicationsToBeInserted = uilmApplicationsToBeInserted.Where(x => x != null && x.ModuleName != null).DistinctBy(x => x.ModuleName).ToList();
+            var validUilmApplicationsToBeUpdated = uilmApplicationsToBeUpdated.Where(x => x != null && x.ModuleName != null).DistinctBy(x => x.ModuleName).ToList();
+            await SaveUilmApplication(validUilmApplicationsToBeInserted, validUilmApplicationsToBeUpdated);
+
+            uilmResourceKeyTimeLines.AddRange(uilmAppTimeLines.Where(x => x?.CurrentData?.UilmApplication?.ModuleName != null).DistinctBy(x => x.CurrentData.UilmApplication.ModuleName).ToList());
+            //await _uilmRepository.SaveBlocksLanguageManagerTimeLines(uilmResourceKeyTimeLines);
+        }
+
+        private async Task<List<BlocksLanguageModule>> GetLanguageApplications(List<string> appIds = null)
+        {
+            List<BlocksLanguageModule> applications = null;
+
+            if (_blocksBaseCommand.IsExternal)
+            {
+                if (appIds != null && appIds.Count > 0)
+                {
+                    var blocksApplication = await _keyRepository.GetUilmApplications<BlocksLanguageModule>(x => appIds.Contains(x.ItemId), null);
+                    applications = blocksApplication?.Select(x => (BlocksLanguageModule)x).ToList();
+                }
+                else
+                {
+                    var blocksApplication = await _keyRepository.GetUilmApplications<BlocksLanguageModule>(x => true, null);
+                    applications = blocksApplication?.Select(x => (BlocksLanguageModule)x).ToList();
+                }
+            }
+            else
+            {
+                if (appIds != null && appIds.Count > 0)
+                {
+                    applications = await _keyRepository.GetUilmApplications<BlocksLanguageModule>(x => appIds.Contains(x.ItemId), _blocksBaseCommand.ClientTenantId);
+                }
+                else
+                {
+                    applications = await _keyRepository.GetUilmApplications<BlocksLanguageModule>(x => true, _blocksBaseCommand.ClientTenantId);
+                }
+            }
+
+            return applications;
+        }
+
+        private static List<LanguageJsonModel> ExtractModelsFromJson(Stream stream)
+        {
+            List<LanguageJsonModel> languageJsonModels;
+            var memoryStream = stream as MemoryStream;
+            var dataStream = new MemoryStream();
+            dataStream.Write(memoryStream.ToArray(), 0, (memoryStream.ToArray()).Length);
+            dataStream.Seek(0, SeekOrigin.Begin);
+
+            using (var file = new StreamReader(dataStream))
+            {
+                using (var reader = new JsonTextReader(file))
+                {
+                    var serializer = new JsonSerializer();
+                    languageJsonModels = serializer.Deserialize<List<LanguageJsonModel>>(reader);
+                }
+            }
+
+            return languageJsonModels;
+        }
+
         private async Task<(FileResponse, Stream)> GetFileStream(string fileId, string projectKey)
         {
 
@@ -617,7 +846,7 @@ namespace DomainService.Services
 
             //var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
             //var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
-            
+
             for (int i = 2; i <= excelRows; i++)
             {
                 string id = worksheet.Cell(i, columns["ItemId"]).Value.ToString();
@@ -627,7 +856,7 @@ namespace DomainService.Services
                 //string moduleName = worksheet.Cell(i, columns["module"]).Value.ToString();
                 //string type = worksheet.Cell(i, columns["type"]).Value.ToString();
 
-                //var uilmAppTimeLine = GetBlocksLanguageManagerTimeline();
+                var uilmAppTimeLine = GetBlocksLanguageManagerTimeline();
 
                 moduleId = HandleUilmApplication(dbApplications, uilmApplicationsToBeInserted, uilmApplicationsToBeUpdated, moduleId, moduleName, moduleName,
                             uilmAppTimeLine);
@@ -661,7 +890,7 @@ namespace DomainService.Services
 
                 var uilmResourceKeyTimeLine = GetBlocksLanguageManagerTimeline();
 
-                var olduilmResourceKey = await GetUilmResourceKey(uilmResourceKey.AppId, uilmResourceKey.KeyName);
+                var olduilmResourceKey = await GetUilmResourceKey(uilmResourceKey.ModuleId, uilmResourceKey.KeyName);
 
                 uilmResourceKey.ItemId = string.IsNullOrWhiteSpace(uilmResourceKey.ItemId) ? Guid.NewGuid().ToString() : uilmResourceKey.ItemId;
 
@@ -701,5 +930,218 @@ namespace DomainService.Services
             return appId;
         }
 
+        private BlocksLanguageManagerTimeline GetBlocksLanguageManagerTimeline()
+        {
+            return new BlocksLanguageManagerTimeline
+            {
+                ClientTenantId = _blocksBaseCommand.ClientTenantId,
+                ClientSiteId = _blocksBaseCommand.ClientSiteId,
+                OrganizationId = _blocksBaseCommand.OrganizationId,
+                UserId = BlocksContext.GetContext()?.UserId ?? ""
+            };
+        }
+
+        private string HandleApplicationWithoutAppId(List<BlocksLanguageModule> dbApplications, List<BlocksLanguageModule> uilmApplicationsToBeInserted,
+            List<BlocksLanguageModule> uilmApplicationsToBeUpdated, string appName, string moduleName, BlocksLanguageManagerTimeline uilmAppTimeLine)
+        {
+            string appId;
+            var application = dbApplications?.FirstOrDefault(x => x.ModuleName == moduleName);
+            if (application != null)
+            {
+                uilmAppTimeLine.LogFrom = "IMPORT_UPDATE_" + _format;
+                uilmAppTimeLine.PreviousData = new LanguageManagerDto
+                {
+                    UilmApplication = JsonConvert.DeserializeObject<BlocksLanguageModule>(JsonConvert.SerializeObject(application)),
+                };
+
+                appId = application.ItemId;
+                //appId = application.Id;
+                application.Name = appName;
+                application.ModuleName = moduleName;
+
+                var alreadyAddedToUpdateList = uilmApplicationsToBeUpdated.FirstOrDefault(x => x.ModuleName == moduleName);
+                if (alreadyAddedToUpdateList is null)
+                {
+                    uilmApplicationsToBeUpdated.Add(application);
+                }
+
+                uilmAppTimeLine.CurrentData = new LanguageManagerDto
+                {
+                    UilmApplication = application,
+                };
+            }
+            else
+            {
+                var alreadyInsertedToApp = uilmApplicationsToBeInserted.FirstOrDefault(x => x.ModuleName == moduleName);
+                if (alreadyInsertedToApp is null)
+                {
+                    var app = new BlocksLanguageModule()
+                    {
+                        ItemId = Guid.NewGuid().ToString(),
+                        Name = appName,
+                        ModuleName = moduleName,
+                    };
+
+                    uilmApplicationsToBeInserted.Add(app);
+
+                    uilmAppTimeLine.PreviousData = null;
+                    uilmAppTimeLine.LogFrom = "IMPORT_ADD_" + _format;
+                    uilmAppTimeLine.CurrentData = new LanguageManagerDto
+                    {
+                        UilmApplication = application,
+                    };
+
+                    appId = app.ItemId;
+                    //appId = app.Id;
+                }
+                else
+                {
+                    appId = alreadyInsertedToApp.ItemId;
+                    //appId = alreadyInsertedToApp.Id;
+                }
+            }
+
+            return appId;
+        }
+
+        private void HandleApplicationWithAppId(List<BlocksLanguageModule> dbApplications, List<BlocksLanguageModule> uilmApplicationsToBeInserted, List<BlocksLanguageModule> uilmApplicationsToBeUpdated,
+            string appId, string appName, string moduleName, BlocksLanguageManagerTimeline uilmAppTimeLine)
+        {
+            var application = dbApplications?.FirstOrDefault(x => x.ItemId == appId);
+            if (application != null)
+            {
+                uilmAppTimeLine.PreviousData = new LanguageManagerDto
+                {
+                    UilmApplication = JsonConvert.DeserializeObject<BlocksLanguageModule>(JsonConvert.SerializeObject(application)),
+                };
+                uilmAppTimeLine.LogFrom = "IMPORT_UPDATE_" + _format;
+
+                application.Name = appName;
+                application.ModuleName = moduleName;
+
+                var alreadyAddedToUpdateList = uilmApplicationsToBeUpdated.FirstOrDefault(x => x.ItemId == appId);
+                if (alreadyAddedToUpdateList is null)
+                {
+                    uilmApplicationsToBeUpdated.Add(application);
+                }
+
+                uilmAppTimeLine.CurrentData = new LanguageManagerDto
+                {
+                    UilmApplication = application,
+                };
+            }
+            else
+            {
+                var alreadyAddedToInsertList = uilmApplicationsToBeInserted.FirstOrDefault(x => x.ItemId == appId);
+                if (alreadyAddedToInsertList is null)
+                {
+                    BlocksLanguageModule uilmApplication = new()
+                    {
+                        ItemId = appId,
+                        Name = appName,
+                        ModuleName = moduleName,
+                    };
+
+                    uilmApplicationsToBeInserted.Add(uilmApplication);
+
+                    uilmAppTimeLine.PreviousData = null;
+                    uilmAppTimeLine.LogFrom = "IMPORT_ADD_" + _format;
+                    uilmAppTimeLine.CurrentData = new LanguageManagerDto
+                    {
+                        UilmApplication = application,
+                    };
+                }
+            }
+        }
+
+        private async Task<BlocksLanguageKey> GetUilmResourceKey(string appId, string keyName)
+        {
+            if (string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(keyName)) return null;
+
+            if (_blocksBaseCommand.IsExternal)
+            {
+                return await _keyRepository.GetUilmResourceKey<BlocksLanguageResourceKey>(x => x.ModuleId == appId && x.KeyName == keyName);
+            }
+
+            return await _keyRepository.GetUilmResourceKey(x => x.ModuleId == appId && x.KeyName == keyName, _blocksBaseCommand.ClientTenantId);
+        }
+
+        private async Task SaveUilmResourceKey(List<BlocksLanguageKey> uilmResourceKeys, List<BlocksLanguageKey> resourceKeysWithoutId)
+        {
+            if (uilmResourceKeys.Any())
+            {
+                long? updateCount = 0;
+
+                updateCount = await _keyRepository.UpdateUilmResourceKeysForChangeAll(uilmResourceKeys, _blocksBaseCommand.OrganizationId, _blocksBaseCommand.IsExternal, _blocksBaseCommand.ClientTenantId);
+
+                _logger.LogInformation("SaveUilmResourceKey: Updated UilmResourceKeys:{count}", updateCount);
+            }
+            if (resourceKeysWithoutId.Any())
+            {
+                if (!_blocksBaseCommand.IsExternal)
+                {
+                    await _keyRepository.InsertUilmResourceKeys(resourceKeysWithoutId, _blocksBaseCommand.ClientTenantId);
+                }
+
+                await _keyRepository.InsertUilmResourceKeys(resourceKeysWithoutId.Select(key => GetBlocksLanguageResourceKey(key)));
+
+                _logger.LogInformation("SaveUilmResourceKey: Inserted UilmResourceKeys:{count}", resourceKeysWithoutId.Count);
+            }
+        }
+
+        private BlocksLanguageResourceKey GetBlocksLanguageResourceKey(BlocksLanguageKey key)
+        {
+            return new BlocksLanguageResourceKey
+            {
+                ModuleId = key.ModuleId,
+                KeyName = key.KeyName,
+                Resources = key.Resources,
+                ItemId = key.ItemId,
+                CreateDate = key.CreateDate,
+                LastUpdateDate = key.LastUpdateDate,
+                OrganizationId = _blocksBaseCommand.OrganizationId
+            };
+        }
+
+        private async Task SaveUilmApplication(List<BlocksLanguageModule> uilmApplicationsToBeInserted,
+            List<BlocksLanguageModule> uilmApplicationsToBeUpdated)
+        {
+            if (uilmApplicationsToBeUpdated.Any())
+            {
+                await _keyRepository.UpdateBulkUilmApplications(uilmApplicationsToBeUpdated, _blocksBaseCommand.OrganizationId, _blocksBaseCommand.IsExternal, _blocksBaseCommand.ClientTenantId);
+
+                await AddNumberOfKeysInUilmApplications(uilmApplicationsToBeUpdated);
+            }
+
+            if (uilmApplicationsToBeInserted.Any())
+            {
+                await InsertUilmApplications(uilmApplicationsToBeInserted);
+
+                await AddNumberOfKeysInUilmApplications(uilmApplicationsToBeInserted);
+            }
+        }
+
+        private async Task AddNumberOfKeysInUilmApplications(List<BlocksLanguageModule> uilmApplications)
+        {
+            foreach (var application in uilmApplications)
+            {
+                await _keyRepository.UpdateKeysCountOfAppAsync(application.ItemId, _blocksBaseCommand.IsExternal, _blocksBaseCommand.ClientTenantId, _blocksBaseCommand.OrganizationId);
+            }
+        }
+
+        private async Task InsertUilmApplications(List<BlocksLanguageModule> uilmApplicationsToBeInserted)
+        {
+            if (!_blocksBaseCommand.IsExternal)
+            {
+                await _keyRepository.InsertUilmApplications(uilmApplicationsToBeInserted, _blocksBaseCommand.ClientTenantId);
+            }
+
+            await _keyRepository.InsertUilmApplications(uilmApplicationsToBeInserted.Select(x => new BlocksLanguageModule
+            {
+                ItemId = x.ItemId,
+                Name = x.Name,
+                ModuleName = x.ModuleName
+            }));
+        }
     }
 }
