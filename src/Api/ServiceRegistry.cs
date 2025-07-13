@@ -1,6 +1,12 @@
-﻿using DomainService.Repositories;
+﻿using Blocks.Extension.DependencyInjection;
+using DomainService.Configuration;
+using DomainService.Repositories;
 using DomainService.Services;
+using DomainService.Shared;
+using DomainService.Shared.Services;
+using DomainService.Storage;
 using FluentValidation;
+using StorageDriver;
 
 namespace Api
 {
@@ -28,6 +34,9 @@ namespace Api
             services.AddSingleton<IKeyManagementService, KeyManagementService>();
             services.AddSingleton<IKeyRepository, KeyRepository>();
             services.AddSingleton<IValidator<Key>, KeyValidator>();
+
+            services.RegisterBlocksStorageServices();
+
 
             services.AddSingleton<IAssistantService, AssistantService>();
 
