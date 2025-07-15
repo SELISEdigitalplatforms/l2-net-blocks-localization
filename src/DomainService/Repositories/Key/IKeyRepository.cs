@@ -26,6 +26,8 @@ namespace DomainService.Repositories
         Task InsertUilmApplications(List<BlocksLanguageModule> uilmApplicationsToBeInserted, string clientTenantId);
         Task InsertUilmApplications(IEnumerable<BlocksLanguageModule> entities);
         Task<List<T>> GetUilmApplications<T>(Expression<Func<BlocksLanguageModule, bool>> expression, string clientTenantId);
-
+        Task<List<BlocksLanguageResourceKey>> GetUilmResourceKeys(Expression<Func<BlocksLanguageResourceKey, bool>> expression, string tenantId);
+        Task<List<T>> GetUilmResourceKeys<T>(Expression<Func<BlocksLanguageResourceKey, bool>> expression);
+        Task<BlocksLanguage> GetLanguageSettingAsync(string clientTenantId);
     }
 }

@@ -185,5 +185,28 @@ namespace Api.Controllers
             await _keyManagementService.SendUilmImportEvent(request);
             return Ok(new BaseMutationResponse { IsSuccess = true });
         }
+
+        [HttpPost]
+        [Authorize]
+        public async Task<IActionResult> UilmExport([FromBody] UilmExportRequest request)
+        {
+
+            if (request == null) return BadRequest(new BaseMutationResponse());
+            _changeControllerContext.ChangeContext(request);
+            if (string.IsNullOrWhiteSpace(request.ProjectKey))
+            {
+                return BadRequest(new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "ProjectKey", "Invalid or missing ProjectKey" }
+                    }
+                });
+            }
+
+            await _keyManagementService.SendUilmExportEvent(request);
+            return Ok(new BaseMutationResponse { IsSuccess = true });
+        }
     }
 }
