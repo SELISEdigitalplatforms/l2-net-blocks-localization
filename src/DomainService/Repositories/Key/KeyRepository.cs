@@ -281,6 +281,20 @@ namespace DomainService.Repositories
                 .Find(expression).FirstOrDefaultAsync();
         }
 
+        public async Task<List<BlocksLanguageResourceKey>> GetUilmResourceKeys(Expression<Func<BlocksLanguageResourceKey, bool>> expression, string tenantId)
+        {
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            return await dataBase.GetCollection<BlocksLanguageResourceKey>("BlocksLanguageResourceKeys").Find(expression).ToListAsync();
+        }
+
+        public async Task<List<T>> GetUilmResourceKeys<T>(Expression<Func<BlocksLanguageResourceKey, bool>> expression)
+        {
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            var project = Builders<BlocksLanguageResourceKey>.Projection.As<T>();
+            return await dataBase.GetCollection<BlocksLanguageResourceKey>($"{nameof(BlocksLanguageResourceKey)}s")
+                .Find(expression).Project(project).ToListAsync();
+        }
+
         public async Task InsertUilmResourceKeys(IEnumerable<BlocksLanguageKey> entities, string tenantId)
         {
             var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
@@ -391,6 +405,12 @@ namespace DomainService.Repositories
 
             return await dataBase.GetCollection<BlocksLanguageModule>($"{nameof(BlocksLanguageModule)}s")
                 .Find(expression).Project(project).ToListAsync();
+        }
+
+        public async Task<BlocksLanguage> GetLanguageSettingAsync(string clientTenantId)
+        {
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            return await dataBase.GetCollection<BlocksLanguage>("BlocksLanguages").Find(x => x.IsDefault).FirstOrDefaultAsync();
         }
     }
 }

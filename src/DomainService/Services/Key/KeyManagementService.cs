@@ -3,17 +3,22 @@ using ClosedXML.Excel;
 using CsvHelper;
 using CsvHelper.Configuration;
 using DomainService.Repositories;
+using DomainService.Services.HelperService;
 using DomainService.Shared;
 using DomainService.Shared.DTOs;
 using DomainService.Shared.Entities;
 using DomainService.Shared.Events;
+using DomainService.Shared.Utilities;
 using DomainService.Storage;
 using FluentValidation;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Newtonsoft.Json;
 using StorageDriver;
 using System.Globalization;
+using System.IO;
+using System.Text;
 
 namespace DomainService.Services
 {
@@ -27,6 +32,8 @@ namespace DomainService.Services
         private readonly IMessageClient _messageClient;
         private readonly IAssistantService _assistantService;
         private readonly IStorageDriverService _storageDriverService;
+        private readonly IServiceProvider _serviceProvider;
+        private readonly StorageHelper _storageHelperService;
 
         private readonly string _tenantId = BlocksContext.GetContext()?.TenantId ?? "";
         private BaseBlocksCommand _blocksBaseCommand;
@@ -40,7 +47,8 @@ namespace DomainService.Services
             IModuleManagementService moduleManagementService,
             IMessageClient messageClient,
             IAssistantService assistantService,
-            IStorageDriverService storageDriverService)
+            IStorageDriverService storageDriverService,
+            StorageHelper storageHelperService)
         {
             _keyRepository = keyRepository;
             _validator = validator;
@@ -50,6 +58,7 @@ namespace DomainService.Services
             _messageClient = messageClient;
             _assistantService = assistantService;
             _storageDriverService = storageDriverService;
+            _storageHelperService = storageHelperService;
         }
 
         public async Task<ApiResponse> SaveKeyAsync(Key key)
@@ -448,6 +457,28 @@ namespace DomainService.Services
                         FileId = request.FileId,
                         MessageCoRelationId = request.MessageCoRelationId,
                         ProjectKey = request.ProjectKey
+                    }
+                }
+            );
+        }
+
+        public async Task SendUilmExportEvent(UilmExportRequest request)
+        {
+            await _messageClient.SendToConsumerAsync(
+                new ConsumerMessage<UilmExportEvent>
+                {
+                    ConsumerName = Utilities.Constants.UilmImportExportQueue,
+                    Payload = new UilmExportEvent
+                    {
+                        FileId = request.ReferenceFileId,
+                        MessageCoRelationId = request.MessageCoRelationId,
+                        ProjectKey = request.ProjectKey,
+                        AppIds = request.AppIds,
+                        CallerTenantId = request.CallerTenantId,
+                        EndDate = request.EndDate,
+                        StartDate = request.StartDate,
+                        Languages = request.Languages,
+                        OutputType = request.OutputType
                     }
                 }
             );
@@ -1142,6 +1173,141 @@ namespace DomainService.Services
                 Name = x.Name,
                 ModuleName = x.ModuleName
             }));
+        }
+
+        public async Task<bool> ExportUilmFile(UilmExportEvent request)
+        {
+            var languageSettings = await GetLanguageSetting();
+            var languageApplications = await GetLanguageApplications(request.AppIds);
+            var languageResourceKeys = await GetLanguageResourceKeys(request.AppIds, request.StartDate, request.EndDate);
+
+            switch (request.OutputType)
+            {
+                case OutputType.Xlsx:
+                    return await GenerateXlsxFile(languageApplications, languageResourceKeys, request.FileId, languageSettings);
+                case OutputType.Json:
+                    return await GenerateJsonFile(languageApplications, languageResourceKeys, request.FileId, languageSettings);
+                case OutputType.Csv:
+                    return await GenerateCsvFile(languageApplications, languageResourceKeys, request.FileId, languageSettings);
+                default:
+                    return false;
+            }
+        }
+
+        private async Task<BlocksLanguage> GetLanguageSetting()
+        {
+            BlocksLanguage languageSetting = null;
+
+            languageSetting = await _keyRepository.GetLanguageSettingAsync(_blocksBaseCommand.ClientTenantId);
+
+            return languageSetting;
+        }
+
+        private async Task<bool> GenerateXlsxFile(List<BlocksLanguageModule> applications,
+            List<BlocksLanguageResourceKey> resourceKeys, string fileId, BlocksLanguage languageSetting)
+        {
+            var xlsxOutputGenerator = _serviceProvider.GetService<XlsxOutputGeneratorService>();
+            var workBook = await xlsxOutputGenerator.GenerateAsync<XLWorkbook>(languageSetting, applications, resourceKeys, languageSetting.LanguageCode);
+            if (workBook == null)
+            {
+                _logger.LogError("GenerateAndWriteFile: Workbook is null");
+                return false;
+            }
+            var xlsxStream = new MemoryStream();
+            workBook.SaveAs(xlsxStream);
+            var fileName = "uilm_xlsx_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".xlsx";
+            return await SaveUilmFile(fileId, fileName, xlsxStream);
+        }
+
+        private async Task<bool> SaveUilmFile(string fileId, string fileName, MemoryStream stream)
+        {
+            var metaData = new Dictionary<string, object>
+            {
+                ["FileName"] = new { Type = "String", Value = fileName },
+                ["Report"] = new { Type = "String", Value = "UILM Export Data" }
+            };
+
+            var result = await _storageHelperService.SaveIntoStorage(stream, fileId, fileName, metaData, "Blocks-Language-Export");
+            if (result)
+            {
+                _logger.LogInformation("SaveUilmFile: Uploaded fileName={FileName}, fileId={NewFileId}", fileName, fileId);
+            }
+            else
+            {
+                _logger.LogError("SaveUilmFile: Error in saving file");
+            }
+
+            return result;
+        }
+
+        private async Task<bool> GenerateJsonFile(List<BlocksLanguageModule> applications,
+            List<BlocksLanguageResourceKey> resourceKeys, string fileId, BlocksLanguage languageSetting)
+        {
+            var jsonOutputGenerator = _serviceProvider.GetService<JsonOutputGeneratorService>();
+            var jsonString = await jsonOutputGenerator.GenerateAsync<string>(languageSetting, applications, resourceKeys, languageSetting.LanguageCode);
+            if (string.IsNullOrEmpty(jsonString))
+            {
+                _logger.LogError("GenerateAndWriteFile: Json is null");
+                return false;
+            }
+            var fileBytes = Encoding.UTF8.GetBytes(jsonString);
+            var jsonStream = new MemoryStream(fileBytes.ToArray());
+            var JsonFileName = "uilm_json_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".json";
+            return await SaveUilmFile(fileId, JsonFileName, jsonStream);
+        }
+
+        private async Task<bool> GenerateCsvFile(List<BlocksLanguageModule> applications,
+            List<BlocksLanguageResourceKey> resourceKeys, string fileId, BlocksLanguage languageSetting)
+        {
+            var csvOutputGenerator = _serviceProvider.GetService<CsvOutputGeneratorService>();
+            var stream = await csvOutputGenerator.GenerateAsync<MemoryStream>(languageSetting, applications, resourceKeys, languageSetting.LanguageCode);
+            if (stream is null)
+            {
+                _logger.LogError("GenerateAndWriteFile: Csv Stream is null");
+                return false;
+            }
+            var csvFileName = "uilm_csv_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".csv";
+            return await SaveUilmFile(fileId, csvFileName, stream);
+        }
+
+        private async Task<List<BlocksLanguageResourceKey>> GetLanguageResourceKeys(List<string> appIds = null, DateTime startDate = default, DateTime endDate = default)
+        {
+            List<BlocksLanguageResourceKey> resourceKeys = null;
+
+            if (_blocksBaseCommand.IsExternal)
+            {
+                if (appIds != null && appIds.Count > 0)
+                {
+                    var blocksResourceKeys = await _keyRepository.GetUilmResourceKeys<BlocksLanguageResourceKey>(x =>
+                        x.OrganizationId == _blocksBaseCommand.OrganizationId &&
+                        appIds.Contains(x.ModuleId));
+
+                    resourceKeys = blocksResourceKeys?.Select(x => (BlocksLanguageResourceKey)x).ToList();
+                }
+                else
+                {
+                    var blocksResourceKeys = await _keyRepository.GetUilmResourceKeys<BlocksLanguageResourceKey>(x =>
+                        x.OrganizationId == _blocksBaseCommand.OrganizationId);
+
+                    resourceKeys = blocksResourceKeys?.Select(x => (BlocksLanguageResourceKey)x).ToList();
+                }
+            }
+            else
+            {
+                if (appIds != null && appIds.Count > 0)
+                {
+                    resourceKeys = await _keyRepository.GetUilmResourceKeys(x =>
+                        appIds.Contains(x.ModuleId),
+                        _blocksBaseCommand.ClientTenantId);
+                }
+                else
+                {
+                    resourceKeys = await _keyRepository.GetUilmResourceKeys(x => true,
+                        _blocksBaseCommand.ClientTenantId);
+                }
+            }
+
+            return resourceKeys;
         }
     }
 }

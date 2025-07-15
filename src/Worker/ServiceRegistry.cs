@@ -2,6 +2,7 @@
 using Blocks.Genesis;
 using DomainService.Repositories;
 using DomainService.Services;
+using DomainService.Services.HelperService;
 using DomainService.Shared.Events;
 using FluentValidation;
 using Worker.Consumers;
@@ -24,6 +25,8 @@ namespace Worker
             services.AddSingleton<ILanguageManagementService, LanguageManagementService>();
             services.AddSingleton<ILanguageRepository, LanguageRepository>();
             services.AddSingleton<IValidator<Language>, LanguageValidator>();
+            
+            services.AddSingleton<StorageHelper>();
 
             services.AddSingleton<IKeyManagementService, KeyManagementService>();
             services.AddSingleton<IKeyRepository, KeyRepository>();

@@ -2,6 +2,7 @@
 using DomainService.Configuration;
 using DomainService.Repositories;
 using DomainService.Services;
+using DomainService.Services.HelperService;
 using DomainService.Shared;
 using DomainService.Shared.Services;
 using DomainService.Storage;
@@ -30,6 +31,8 @@ namespace Api
             services.AddSingleton<ILanguageManagementService, LanguageManagementService>();
             services.AddSingleton<ILanguageRepository, LanguageRepository>();
             services.AddSingleton<IValidator<Language>, LanguageValidator>();
+
+            services.AddSingleton<StorageHelper>();
 
             services.AddSingleton<IKeyManagementService, KeyManagementService>();
             services.AddSingleton<IKeyRepository, KeyRepository>();
