@@ -76,7 +76,8 @@ namespace DomainService.Services.HelperService
                     Message = new
                     {
                         IsSuccess = response,
-                        Message = "Completed translation for all keys"
+                        NotificationTitle = "Translation Completed",
+                        NotificationDescription = "Completed translation for all keys"
                     }
                 }),
                 SaveDenormalizedPayloadAsAnObject = false,
