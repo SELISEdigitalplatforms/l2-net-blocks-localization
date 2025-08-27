@@ -23,6 +23,7 @@ namespace DomainService.Services
     public class KeyManagementService : IKeyManagementService
     {
         private readonly IKeyRepository _keyRepository;
+        private readonly IKeyTimelineRepository _keyTimelineRepository;
         private readonly IValidator<Key> _validator;
         private readonly ILogger<KeyManagementService> _logger;
         private readonly ILanguageManagementService _languageManagementService;
@@ -40,6 +41,7 @@ namespace DomainService.Services
 
         public KeyManagementService(
             IKeyRepository keyRepository,
+            IKeyTimelineRepository keyTimelineRepository,
             IValidator<Key> validator,
             ILogger<KeyManagementService> logger,
             ILanguageManagementService languageManagementService,
@@ -53,6 +55,7 @@ namespace DomainService.Services
             )
         {
             _keyRepository = keyRepository;
+            _keyTimelineRepository = keyTimelineRepository;
             _validator = validator;
             _logger = logger;
             _languageManagementService = languageManagementService;
@@ -106,6 +109,11 @@ namespace DomainService.Services
         public async Task<GetKeysQueryResponse> GetKeysAsync(GetKeysRequest query)
         {
             return await _keyRepository.GetAllKeysAsync(query);
+        }
+
+        public async Task<GetKeyTimelineQueryResponse> GetKeyTimelineAsync(GetKeyTimelineRequest query)
+        {
+            return await _keyTimelineRepository.GetKeyTimelineAsync(query);
         }
 
         public async Task<Key?> GetAsync(GetKeyRequest request)
@@ -654,8 +662,8 @@ namespace DomainService.Services
             var resourceKeysWithoutId = new List<BlocksLanguageKey>();
             var uilmResourceKeys = new List<BlocksLanguageKey>();
 
-            var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
-            var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
+            // var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
+            // var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
 
             foreach (var languageJsonModel in languageJsonModels)
             {
@@ -721,7 +729,7 @@ namespace DomainService.Services
             var validUilmApplicationsToBeUpdated = uilmApplicationsToBeUpdated.Where(x => x != null && x.ModuleName != null).DistinctBy(x => x.ModuleName).ToList();
             await SaveUilmApplication(validUilmApplicationsToBeInserted, validUilmApplicationsToBeUpdated);
 
-            uilmResourceKeyTimeLines.AddRange(uilmAppTimeLines.Where(x => x?.CurrentData?.UilmApplication?.ModuleName != null).DistinctBy(x => x.CurrentData.UilmApplication.ModuleName).ToList());
+            // uilmResourceKeyTimeLines.AddRange(uilmAppTimeLines.Where(x => x?.CurrentData?.UilmApplication?.ModuleName != null).DistinctBy(x => x.CurrentData.UilmApplication.ModuleName).ToList());
             //await _uilmRepository.SaveBlocksLanguageManagerTimeLines(uilmResourceKeyTimeLines);
         }
 
@@ -985,16 +993,16 @@ namespace DomainService.Services
             return appId;
         }
 
-        private BlocksLanguageManagerTimeline GetBlocksLanguageManagerTimeline()
-        {
-            return new BlocksLanguageManagerTimeline
-            {
-                ClientTenantId = _blocksBaseCommand?.ClientTenantId,
-                ClientSiteId = _blocksBaseCommand?.ClientSiteId,
-                OrganizationId = _blocksBaseCommand?.OrganizationId,
-                UserId = BlocksContext.GetContext()?.UserId ?? ""
-            };
-        }
+        // private BlocksLanguageManagerTimeline GetBlocksLanguageManagerTimeline()
+        // {
+        //     return new BlocksLanguageManagerTimeline
+        //     {
+        //         ClientTenantId = _blocksBaseCommand?.ClientTenantId,
+        //         ClientSiteId = _blocksBaseCommand?.ClientSiteId,
+        //         OrganizationId = _blocksBaseCommand?.OrganizationId,
+        //         UserId = BlocksContext.GetContext()?.UserId ?? ""
+        //     };
+        // }
 
         private string HandleApplicationWithoutAppId(List<BlocksLanguageModule> dbApplications, List<BlocksLanguageModule> uilmApplicationsToBeInserted,
             List<BlocksLanguageModule> uilmApplicationsToBeUpdated, bool isPartiallyTranslated, string moduleName)

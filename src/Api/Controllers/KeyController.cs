@@ -65,6 +65,20 @@ namespace Api.Controllers
             return await _keyManagementService.GetKeysAsync(query);
         }
 
+        /// <summary>
+        /// Retrieves Key timeline with pagination.
+        /// </summary>
+        /// <param name="query">The query parameters for filtering and pagination.</param>
+        /// <returns>A paginated list of <see cref="KeyTimeline"/> objects.</returns>
+        [HttpPost]
+        [Authorize]
+        public async Task<GetKeyTimelineQueryResponse> GetTimeline([FromBody] GetKeyTimelineRequest query)
+        {
+            if (query == null) BadRequest(new BaseMutationResponse());
+            _changeControllerContext.ChangeContext(query);
+            return await _keyManagementService.GetKeyTimelineAsync(query);
+        }
+
         [HttpGet]
         [Authorize]
         public async Task<Key?> Get([FromQuery] GetKeyRequest request)

@@ -39,6 +39,7 @@ namespace Worker
 
             services.AddSingleton<IKeyManagementService, KeyManagementService>();
             services.AddSingleton<IKeyRepository, KeyRepository>();
+            services.AddSingleton<IKeyTimelineRepository, KeyTimelineRepository>();
             services.AddSingleton<IValidator<Key>, KeyValidator>();
 
             services.AddSingleton<IAssistantService, AssistantService>();
