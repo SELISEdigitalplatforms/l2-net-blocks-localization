@@ -76,6 +76,13 @@ namespace DomainService.Services
             {
                 var repoKey = await MappedIntoRepoKeyAsync(key);
                 await _keyRepository.SaveKeyAsync(repoKey);
+                var request = new GenerateUilmFilesRequest
+                {
+                    Guid = key.ItemId,
+                    ModuleId = key.ModuleId,
+                    ProjectKey = key.ProjectKey
+                };
+                await SendGenerateUilmFilesEvent(request);
             }
             catch (Exception ex)
             {
@@ -329,7 +336,9 @@ namespace DomainService.Services
 
             List<Language> languageSetting = await _languageManagementService.GetLanguagesAsync();
 
-            List<BlocksLanguageModule> applications = await _moduleManagementService.GetModulesAsync();
+            List<BlocksLanguageModule> applications = string.IsNullOrWhiteSpace(command.ModuleId)
+                ? await _moduleManagementService.GetModulesAsync()
+                : await _moduleManagementService.GetModulesAsync(command.ModuleId);
 
             _logger.LogInformation("++ JsonOutputGeneratorService: GenerateAsync()... Found {ApplicationsCount} UilmApplications.", applications.Count);
 
