@@ -23,6 +23,7 @@ namespace DomainService.Services
     public class KeyManagementService : IKeyManagementService
     {
         private readonly IKeyRepository _keyRepository;
+        private readonly IKeyTimelineRepository _keyTimelineRepository;
         private readonly IValidator<Key> _validator;
         private readonly ILogger<KeyManagementService> _logger;
         private readonly ILanguageManagementService _languageManagementService;
@@ -40,6 +41,7 @@ namespace DomainService.Services
 
         public KeyManagementService(
             IKeyRepository keyRepository,
+            IKeyTimelineRepository keyTimelineRepository,
             IValidator<Key> validator,
             ILogger<KeyManagementService> logger,
             ILanguageManagementService languageManagementService,
@@ -53,6 +55,7 @@ namespace DomainService.Services
             )
         {
             _keyRepository = keyRepository;
+            _keyTimelineRepository = keyTimelineRepository;
             _validator = validator;
             _logger = logger;
             _languageManagementService = languageManagementService;
@@ -74,6 +77,16 @@ namespace DomainService.Services
 
             try
             {
+                // Get existing key for timeline tracking
+                var existingRepoKey = await _keyRepository.GetKeyByNameAsync(key.KeyName, key.ModuleId);
+                Key? previousKey = null;
+                bool isNewKey = existingRepoKey == null;
+                
+                if (!isNewKey && existingRepoKey != null)
+                {
+                    previousKey = MapBlocksLanguageKeyToKey(existingRepoKey, key.ProjectKey);
+                }
+
                 var repoKey = await MappedIntoRepoKeyAsync(key);
                 await _keyRepository.SaveKeyAsync(repoKey);
                 if (key != null && key.ShouldPublish == true)
@@ -86,6 +99,24 @@ namespace DomainService.Services
                     };
                     await SendGenerateUilmFilesEvent(request);
                 }
+
+                // Create current key state for timeline
+                var currentKey = new Key
+                {
+                    ItemId = repoKey.ItemId,
+                    KeyName = key.KeyName,
+                    ModuleId = key.ModuleId,
+                    Resources = key.Resources,
+                    Routes = key.Routes,
+                    IsPartiallyTranslated = key.IsPartiallyTranslated,
+                    IsNewKey = isNewKey,
+                    LastUpdateDate = repoKey.LastUpdateDate,
+                    CreateDate = repoKey.CreateDate,
+                    ProjectKey = key.ProjectKey
+                };
+
+                // Create timeline entry
+                await CreateKeyTimelineEntryAsync(previousKey, currentKey, "KeyController.Save");
             }
             catch (Exception ex)
             {
@@ -118,6 +149,11 @@ namespace DomainService.Services
             return await _keyRepository.GetAllKeysAsync(query);
         }
 
+        public async Task<GetKeyTimelineQueryResponse> GetKeyTimelineAsync(GetKeyTimelineRequest query)
+        {
+            return await _keyTimelineRepository.GetKeyTimelineAsync(query);
+        }
+
         public async Task<Key?> GetAsync(GetKeyRequest request)
         {
             var key = await _keyRepository.GetByIdAsync(request.ItemId);
@@ -141,6 +177,31 @@ namespace DomainService.Services
                         { "ItemId", "Key not found" }
                     }
                 };
+            }
+
+            // Create timeline entry before deletion
+            try
+            {
+                // For deletion, we set current to null and previous to the existing key
+                // But since CreateKeyTimelineEntryAsync expects currentKey, we'll create a special delete entry
+                var deletedKey = new Key
+                {
+                    ItemId = key.ItemId,
+                    KeyName = key.KeyName,
+                    ModuleId = key.ModuleId,
+                    Resources = key.Resources,
+                    Routes = key.Routes,
+                    IsPartiallyTranslated = key.IsPartiallyTranslated,
+                    IsNewKey = false,
+                    LastUpdateDate = DateTime.UtcNow,
+                    CreateDate = key.CreateDate,
+                    ProjectKey = key.ProjectKey
+                };
+                await CreateKeyTimelineEntryAsync(key, deletedKey, "KeyController.Delete");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Failed to create timeline entry for deleted Key {KeyId}: {Error}", key.ItemId, ex.Message);
             }
 
             await _keyRepository.DeleteAsync(request.ItemId);
@@ -326,9 +387,21 @@ namespace DomainService.Services
         {
             var updateCount = await _keyRepository.UpdateUilmResourceKeysForChangeAll(resourceKeys, null, false, null);
 
-            //await _languageManagementRepository.UpdateUilmResourceKeysTimelineForChangeAll(resourceKeyTimelines);
-
-            //await CallWebhook(command);
+            // Create timeline entries for updated keys
+            foreach (var resourceKey in resourceKeys)
+            {
+                try
+                {
+                    var currentKey = MapBlocksLanguageKeyToKey(resourceKey, request.ProjectKey);
+                    // For TranslateAll, we don't have the previous state easily accessible
+                    // but we can indicate this was a translation operation
+                    await CreateKeyTimelineEntryAsync(null, currentKey, "TranslateAll");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError("Failed to create timeline entry for Key {KeyId} during TranslateAll: {Error}", resourceKey.ItemId, ex.Message);
+                }
+            }
 
             _logger.LogInformation($"ChangeAll: Uilm Resource key updated: {updateCount}");
         }
@@ -666,8 +739,8 @@ namespace DomainService.Services
             var resourceKeysWithoutId = new List<BlocksLanguageKey>();
             var uilmResourceKeys = new List<BlocksLanguageKey>();
 
-            var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
-            var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
+            // var uilmAppTimeLines = new List<BlocksLanguageManagerTimeline>();
+            // var uilmResourceKeyTimeLines = new List<BlocksLanguageManagerTimeline>();
 
             foreach (var languageJsonModel in languageJsonModels)
             {
@@ -733,7 +806,7 @@ namespace DomainService.Services
             var validUilmApplicationsToBeUpdated = uilmApplicationsToBeUpdated.Where(x => x != null && x.ModuleName != null).DistinctBy(x => x.ModuleName).ToList();
             await SaveUilmApplication(validUilmApplicationsToBeInserted, validUilmApplicationsToBeUpdated);
 
-            uilmResourceKeyTimeLines.AddRange(uilmAppTimeLines.Where(x => x?.CurrentData?.UilmApplication?.ModuleName != null).DistinctBy(x => x.CurrentData.UilmApplication.ModuleName).ToList());
+            // uilmResourceKeyTimeLines.AddRange(uilmAppTimeLines.Where(x => x?.CurrentData?.UilmApplication?.ModuleName != null).DistinctBy(x => x.CurrentData.UilmApplication.ModuleName).ToList());
             //await _uilmRepository.SaveBlocksLanguageManagerTimeLines(uilmResourceKeyTimeLines);
         }
 
@@ -997,16 +1070,16 @@ namespace DomainService.Services
             return appId;
         }
 
-        private BlocksLanguageManagerTimeline GetBlocksLanguageManagerTimeline()
-        {
-            return new BlocksLanguageManagerTimeline
-            {
-                ClientTenantId = _blocksBaseCommand?.ClientTenantId,
-                ClientSiteId = _blocksBaseCommand?.ClientSiteId,
-                OrganizationId = _blocksBaseCommand?.OrganizationId,
-                UserId = BlocksContext.GetContext()?.UserId ?? ""
-            };
-        }
+        // private BlocksLanguageManagerTimeline GetBlocksLanguageManagerTimeline()
+        // {
+        //     return new BlocksLanguageManagerTimeline
+        //     {
+        //         ClientTenantId = _blocksBaseCommand?.ClientTenantId,
+        //         ClientSiteId = _blocksBaseCommand?.ClientSiteId,
+        //         OrganizationId = _blocksBaseCommand?.OrganizationId,
+        //         UserId = BlocksContext.GetContext()?.UserId ?? ""
+        //     };
+        // }
 
         private string HandleApplicationWithoutAppId(List<BlocksLanguageModule> dbApplications, List<BlocksLanguageModule> uilmApplicationsToBeInserted,
             List<BlocksLanguageModule> uilmApplicationsToBeUpdated, bool isPartiallyTranslated, string moduleName)
@@ -1141,6 +1214,20 @@ namespace DomainService.Services
 
                 updateCount = await _keyRepository.UpdateUilmResourceKeysForChangeAll(uilmResourceKeys, _blocksBaseCommand?.OrganizationId, _blocksBaseCommand?.IsExternal ?? false, _blocksBaseCommand?.ClientTenantId);
 
+                // Create timeline entries for updated keys
+                foreach (var resourceKey in uilmResourceKeys)
+                {
+                    try
+                    {
+                        var currentKey = MapBlocksLanguageKeyToKey(resourceKey, null);
+                        await CreateKeyTimelineEntryAsync(null, currentKey, "UilmImport.Update");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError("Failed to create timeline entry for updated Key {KeyId} during UilmImport: {Error}", resourceKey.ItemId, ex.Message);
+                    }
+                }
+
                 _logger.LogInformation("SaveUilmResourceKey: Updated UilmResourceKeys:{count}", updateCount);
             }
             if (resourceKeysWithoutId.Any())
@@ -1150,7 +1237,20 @@ namespace DomainService.Services
                 await _keyRepository.InsertUilmResourceKeys(resourceKeysWithoutId, _blocksBaseCommand?.ClientTenantId);
                 //}
 
-                //await _keyRepository.InsertUilmResourceKeys(resourceKeysWithoutId.Select(key => GetBlocksLanguageKey(key)));
+                // Create timeline entries for inserted keys
+                foreach (var resourceKey in resourceKeysWithoutId)
+                {
+                    try
+                    {
+                        var currentKey = MapBlocksLanguageKeyToKey(resourceKey, null);
+                        currentKey.IsNewKey = true;
+                        await CreateKeyTimelineEntryAsync(null, currentKey, "UilmImport.Insert");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError("Failed to create timeline entry for new Key {KeyId} during UilmImport: {Error}", resourceKey.ItemId, ex.Message);
+                    }
+                }
 
                 _logger.LogInformation("SaveUilmResourceKey: Inserted UilmResourceKeys:{count}", resourceKeysWithoutId.Count);
             }
@@ -1348,6 +1448,50 @@ namespace DomainService.Services
             {
                 _logger.LogError("Notification: sending failed for TranslateAllEvent with messageCoRelationId: {MessageCoRelationId}", messageCoRelationId);
             }
+        }
+
+        private async Task CreateKeyTimelineEntryAsync(Key? previousKey, Key currentKey, string logFrom)
+        {
+            try
+            {
+                var context = BlocksContext.GetContext();
+                var timeline = new KeyTimeline
+                {
+                    EntityId = currentKey.ItemId,
+                    ProjectKey = currentKey.ProjectKey,
+                    CurrentData = currentKey,
+                    PreviousData = previousKey,
+                    LogFrom = logFrom,
+                    UserId = context?.UserId ?? "System",
+                    CreateDate = DateTime.UtcNow,
+                    LastUpdateDate = DateTime.UtcNow
+                };
+
+                await _keyTimelineRepository.SaveKeyTimelineAsync(timeline);
+                _logger.LogInformation("Timeline entry created for Key {KeyId} from {LogFrom}", currentKey.ItemId, logFrom);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Failed to create timeline entry for Key {KeyId}: {Error}", currentKey.ItemId, ex.Message);
+                // Don't throw - timeline creation should not break the main operation
+            }
+        }
+
+        private Key MapBlocksLanguageKeyToKey(BlocksLanguageKey blocksKey, string? projectKey = null)
+        {
+            return new Key
+            {
+                ItemId = blocksKey.ItemId,
+                KeyName = blocksKey.KeyName,
+                ModuleId = blocksKey.ModuleId,
+                Resources = blocksKey.Resources,
+                Routes = blocksKey.Routes,
+                IsPartiallyTranslated = blocksKey.IsPartiallyTranslated,
+                IsNewKey = false, // Will be set appropriately in calling context
+                LastUpdateDate = blocksKey.LastUpdateDate,
+                CreateDate = blocksKey.CreateDate,
+                ProjectKey = projectKey
+            };
         }
     }
 }
