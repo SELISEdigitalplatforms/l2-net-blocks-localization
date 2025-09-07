@@ -21,7 +21,7 @@ namespace DomainService.Services
             _logger = logger;
         }
 
-        public override Task<T> GenerateAsync<T>(BlocksLanguage languageSetting, List<BlocksLanguageModule> applications, List<BlocksLanguageKey> resourceKeys, string defaultLanguage)
+        public override Task<T> GenerateAsync<T>(List<BlocksLanguage> languageSettings, List<BlocksLanguageModule> applications, List<BlocksLanguageKey> resourceKeys, string defaultLanguage)
         {
             try
             {
@@ -31,13 +31,20 @@ namespace DomainService.Services
                 {
                     BlocksLanguageModule app = applications.FirstOrDefault(x => x.ItemId == resourceKey.ModuleId);
 
+                    // Filter out "type" culture and empty values from resources
+                    var filteredResources = resourceKey.Resources?
+                        .Where(r => !string.IsNullOrEmpty(r.Culture) && 
+                                   r.Culture.ToLower() != "type" && 
+                                   !string.IsNullOrEmpty(r.Value))
+                        .ToArray();
+
                     var model = new LanguageJsonModel
                     {
                         _id = resourceKey.ItemId,
                         ModuleId = resourceKey.ModuleId,
                         Value = resourceKey.Value,
                         KeyName = resourceKey.KeyName,
-                        Resources = resourceKey.Resources,
+                        Resources = filteredResources, // Use filtered resources
                         TenantId = resourceKey.TenantId,
                         IsPartiallyTranslated = resourceKey.IsPartiallyTranslated,
                         Routes = resourceKey.Routes
@@ -46,18 +53,22 @@ namespace DomainService.Services
                     jsonOutputModels.Add(model);
                 }
 
-                var identifiers = new string[] { languageSetting.LanguageCode };
+                // Use all language codes from BlocksLanguage collection
+                var identifiers = languageSettings
+                    .Select(x => x.LanguageCode)
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToArray();
 
                 var builder = new StringBuilder();
                 var stringWriter = new StringWriter(builder);
                 var csv = new CsvWriter(stringWriter, CultureInfo.InvariantCulture);
 
-                csv.WriteField("Id");
-                csv.WriteField("AppId");
-                csv.WriteField("Type");
-                csv.WriteField("App");
+                csv.WriteField("ItemId");
+                csv.WriteField("ModuleId");
                 csv.WriteField("Module");
-                csv.WriteField("Key");
+                csv.WriteField("KeyName");
 
                 foreach (string identifier in identifiers)
                 {
@@ -72,14 +83,12 @@ namespace DomainService.Services
 
                 foreach (var item in jsonOutputModels)
                 {
+                    BlocksLanguageModule app = applications.FirstOrDefault(x => x.ItemId == item.ModuleId);
+                    
                     csv.WriteField(item._id);
-                    csv.WriteField(item.TenantId);
-                    csv.WriteField(item.Value);
-                    csv.WriteField(item.KeyName);
                     csv.WriteField(item.ModuleId);
-                    csv.WriteField(item.Routes);
-                    csv.WriteField(item.Resources);
-                    csv.WriteField(item.IsPartiallyTranslated);
+                    csv.WriteField(app?.ModuleName);
+                    csv.WriteField(item.KeyName);
 
                     foreach (string identifier in identifiers)
                     {

@@ -19,7 +19,7 @@ namespace DomainService.Services
             _logger = logger;
         }
 
-        public override Task<T> GenerateAsync<T>(BlocksLanguage languageSetting, List<BlocksLanguageModule> applications,
+        public override Task<T> GenerateAsync<T>(List<BlocksLanguage> languageSettings, List<BlocksLanguageModule> applications,
             List<BlocksLanguageKey> resourceKeys, string defaultLanguage)
         {
             try
@@ -33,14 +33,18 @@ namespace DomainService.Services
                 worksheet.ColumnWidth = 40;
 
                 //create all the required columns
-                worksheet.Cell(row, column++).Value = "id";
-                worksheet.Cell(row, column++).Value = "app id";
-                worksheet.Cell(row, column++).Value = "type";
-                worksheet.Cell(row, column++).Value = "app";
-                worksheet.Cell(row, column++).Value = "module";
-                worksheet.Cell(row, column++).Value = "key";
+                worksheet.Cell(row, column++).Value = "ItemId";
+                worksheet.Cell(row, column++).Value = "ModuleId";
+                worksheet.Cell(row, column++).Value = "Value";
+                worksheet.Cell(row, column++).Value = "Module";
+                worksheet.Cell(row, column++).Value = "KeyName";
 
-                IEnumerable<string> indentifiers = new string[] { languageSetting.LanguageCode };
+                // Use all language codes from BlocksLanguage collection
+                IEnumerable<string> indentifiers = languageSettings
+                    .Select(x => x.LanguageCode)
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .Distinct()
+                    .OrderBy(x => x);
 
                 HandleLanguagesColumnName(row, column, worksheet, indentifiers, defaultLanguage);
 
@@ -80,7 +84,6 @@ namespace DomainService.Services
                 worksheet.Cell(row, column++).Value = resourceKey.ItemId;
                 worksheet.Cell(row, column++).Value = resourceKey.ModuleId;
                 worksheet.Cell(row, column++).Value = resourceKey.Value;
-                worksheet.Cell(row, column++).Value = app?.Name;
                 worksheet.Cell(row, column++).Value = app?.ModuleName;
                 worksheet.Cell(row, column++).Value = resourceKey.KeyName;
 
