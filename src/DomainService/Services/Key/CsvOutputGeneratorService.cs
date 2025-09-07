@@ -31,13 +31,20 @@ namespace DomainService.Services
                 {
                     BlocksLanguageModule app = applications.FirstOrDefault(x => x.ItemId == resourceKey.ModuleId);
 
+                    // Filter out "type" culture and empty values from resources
+                    var filteredResources = resourceKey.Resources?
+                        .Where(r => !string.IsNullOrEmpty(r.Culture) && 
+                                   r.Culture.ToLower() != "type" && 
+                                   !string.IsNullOrEmpty(r.Value))
+                        .ToArray();
+
                     var model = new LanguageJsonModel
                     {
                         _id = resourceKey.ItemId,
                         ModuleId = resourceKey.ModuleId,
                         Value = resourceKey.Value,
                         KeyName = resourceKey.KeyName,
-                        Resources = resourceKey.Resources,
+                        Resources = filteredResources, // Use filtered resources
                         TenantId = resourceKey.TenantId,
                         IsPartiallyTranslated = resourceKey.IsPartiallyTranslated,
                         Routes = resourceKey.Routes
