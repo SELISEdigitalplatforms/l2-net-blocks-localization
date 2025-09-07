@@ -8,6 +8,7 @@ namespace DomainService.Services
     {
         Task<ApiResponse> SaveKeyAsync(Key key);
         Task<GetKeysQueryResponse> GetKeysAsync(GetKeysRequest query);
+        Task<GetKeyTimelineQueryResponse> GetKeyTimelineAsync(GetKeyTimelineRequest query);
         Task<bool> GenerateAsync(GenerateUilmFilesEvent command);
         Task<string> GetUilmFile(GetUilmFileRequest request);
         Task<Key?> GetAsync(GetKeyRequest request);
