@@ -52,12 +52,11 @@ namespace DomainService.Services
                 var stringWriter = new StringWriter(builder);
                 var csv = new CsvWriter(stringWriter, CultureInfo.InvariantCulture);
 
-                csv.WriteField("Id");
-                csv.WriteField("AppId");
-                csv.WriteField("Type");
-                csv.WriteField("App");
+                csv.WriteField("ItemId");
+                csv.WriteField("ModuleId");
+                csv.WriteField("Value");
                 csv.WriteField("Module");
-                csv.WriteField("Key");
+                csv.WriteField("KeyName");
 
                 foreach (string identifier in identifiers)
                 {
@@ -72,14 +71,13 @@ namespace DomainService.Services
 
                 foreach (var item in jsonOutputModels)
                 {
+                    BlocksLanguageModule app = applications.FirstOrDefault(x => x.ItemId == item.ModuleId);
+                    
                     csv.WriteField(item._id);
-                    csv.WriteField(item.TenantId);
-                    csv.WriteField(item.Value);
-                    csv.WriteField(item.KeyName);
                     csv.WriteField(item.ModuleId);
-                    csv.WriteField(item.Routes);
-                    csv.WriteField(item.Resources);
-                    csv.WriteField(item.IsPartiallyTranslated);
+                    csv.WriteField(item.Value);
+                    csv.WriteField(app?.ModuleName);
+                    csv.WriteField(item.KeyName);
 
                     foreach (string identifier in identifiers)
                     {

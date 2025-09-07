@@ -664,7 +664,7 @@ namespace DomainService.Services
 
                     var cultures = new Dictionary<string, string>();
 
-                    for (int i = 6; i < fields.Length; i++)
+                    for (int i = 5; i < fields.Length; i++)
                     {
                         if (fields[i].Contains("_CharacterLength"))
                         {
@@ -680,7 +680,7 @@ namespace DomainService.Services
                     {
                         var languageJsonModel = new LanguageJsonModel
                         {
-                            _id = csv.GetField<string>("_id"),
+                            _id = csv.GetField<string>("ItemId"),
                             Value = csv.GetField<string>("Value"),
                             KeyName = csv.GetField<string>("KeyName"),
                             // Resources will be populated from individual culture columns below
