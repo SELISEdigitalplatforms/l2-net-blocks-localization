@@ -417,5 +417,28 @@ namespace DomainService.Repositories
             var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
             return await dataBase.GetCollection<BlocksLanguage>("BlocksLanguages").Find(_ => true).ToListAsync();
         }
+
+        public async Task<Dictionary<string, long>> DeleteCollectionsAsync(List<string> collections)
+        {
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            var result = new Dictionary<string, long>();
+
+            var validCollections = new List<string> { "BlocksLanguageKeys", "BlocksLanguages", "BlocksLanguageModules", "UilmFiles" };
+
+            foreach (var collection in collections)
+            {
+                if (validCollections.Contains(collection))
+                {
+                    var deleteResult = await dataBase.GetCollection<BsonDocument>(collection).DeleteManyAsync(Builders<BsonDocument>.Filter.Empty);
+                    result[collection] = deleteResult.DeletedCount;
+                }
+                else
+                {
+                    result[collection] = -1; // Invalid collection
+                }
+            }
+
+            return result;
+        }
     }
 }

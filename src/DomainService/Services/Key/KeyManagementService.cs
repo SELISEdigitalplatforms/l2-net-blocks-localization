@@ -1471,6 +1471,66 @@ namespace DomainService.Services
             }
         }
 
+        public async Task<BaseMutationResponse> DeleteCollectionsAsync(DeleteCollectionsRequest request)
+        {
+            _logger.LogInformation("Delete collections operation started");
+
+            if (request.Collections == null || !request.Collections.Any())
+            {
+                _logger.LogWarning("Delete collections operation ended - No collections specified");
+                return new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "Collections", "At least one collection must be specified" }
+                    }
+                };
+            }
+
+            var validCollections = new List<string> { "BlocksLanguageKeys", "BlocksLanguages", "BlocksLanguageModules", "UilmFiles" };
+            var invalidCollections = request.Collections.Where(c => !validCollections.Contains(c)).ToList();
+
+            if (invalidCollections.Any())
+            {
+                _logger.LogWarning("Delete collections operation ended - Invalid collections specified: {InvalidCollections}", string.Join(", ", invalidCollections));
+                return new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "Collections", $"Invalid collections specified: {string.Join(", ", invalidCollections)}. Valid collections are: {string.Join(", ", validCollections)}" }
+                    }
+                };
+            }
+
+            try
+            {
+                var deleteResults = await _keyRepository.DeleteCollectionsAsync(request.Collections);
+                
+                var totalDeleted = deleteResults.Values.Sum();
+                _logger.LogInformation("Delete collections operation completed successfully. Collections: {Collections}, Total records deleted: {TotalDeleted}", 
+                    string.Join(", ", request.Collections), totalDeleted);
+
+                return new BaseMutationResponse 
+                { 
+                    IsSuccess = true
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Delete collections operation failed");
+                return new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "Operation", "Failed to delete collections data. Please try again." }
+                    }
+                };
+            }
+        }
+
         private async Task CreateKeyTimelineEntryAsync(BlocksLanguageKey? previousKey, BlocksLanguageKey currentKey, string logFrom)
         {
             try
