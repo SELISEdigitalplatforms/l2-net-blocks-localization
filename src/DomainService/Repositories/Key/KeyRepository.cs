@@ -440,5 +440,13 @@ namespace DomainService.Repositories
 
             return result;
         }
+
+        public async Task SaveUilmExportedFileAsync(UilmExportedFile exportedFile)
+        {
+            var dataBase = _dbContextProvider.GetDatabase(BlocksContext.GetContext()?.TenantId ?? "");
+            var collection = dataBase.GetCollection<UilmExportedFile>("UilmExportedFiles");
+            
+            await collection.InsertOneAsync(exportedFile);
+        }
     }
 }
