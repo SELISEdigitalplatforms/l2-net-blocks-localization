@@ -144,6 +144,11 @@ namespace DomainService.Services
             return await _keyRepository.GetAllKeysAsync(query);
         }
 
+        public async Task<GetUilmExportedFilesQueryResponse> GetUilmExportedFilesAsync(GetUilmExportedFilesRequest request)
+        {
+            return await _keyRepository.GetUilmExportedFilesAsync(request);
+        }
+
         public async Task<GetKeyTimelineQueryResponse> GetKeyTimelineAsync(GetKeyTimelineRequest query)
         {
             return await _keyTimelineRepository.GetKeyTimelineAsync(query);
