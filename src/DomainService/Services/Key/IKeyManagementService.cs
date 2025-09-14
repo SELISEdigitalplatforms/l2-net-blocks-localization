@@ -24,5 +24,6 @@ namespace DomainService.Services
         Task PublishUilmExportNotification(bool response, string fileId, string? messageCoRelationId, string tenantId);
         Task PublishTranslateAllNotification(bool response, string? messageCoRelationId);
         Task<BaseMutationResponse> DeleteCollectionsAsync(DeleteCollectionsRequest request);
+        Task<BaseMutationResponse> RollbackAsync(RollbackRequest request);
     }
 }
