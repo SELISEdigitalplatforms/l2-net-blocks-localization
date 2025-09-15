@@ -1599,6 +1599,94 @@ namespace DomainService.Services
             }
         }
 
+        public async Task<BaseMutationResponse> RollbackAsync(RollbackRequest request)
+        {
+            _logger.LogInformation("Rollback operation started for ItemId: {ItemId}", request.ItemId);
+
+            try
+            {
+                // Get the timeline entry directly by ItemId
+                var timeline = await _keyTimelineRepository.GetTimelineByItemIdAsync(request.ItemId);
+
+                if (timeline == null)
+                {
+                    _logger.LogWarning("Rollback failed - No timeline found for ItemId: {ItemId}", request.ItemId);
+                    return new BaseMutationResponse
+                    {
+                        IsSuccess = false,
+                        Errors = new Dictionary<string, string>
+                        {
+                            { "ItemId", "No timeline found for the specified key" }
+                        }
+                    };
+                }
+
+                if (timeline.PreviousData == null || string.IsNullOrEmpty(timeline.PreviousData.ItemId))
+                {
+                    _logger.LogWarning("Rollback failed - No previous data available for ItemId: {ItemId}", request.ItemId);
+                    return new BaseMutationResponse
+                    {
+                        IsSuccess = false,
+                        Errors = new Dictionary<string, string>
+                        {
+                            { "PreviousData", "No previous data available for rollback" }
+                        }
+                    };
+                }
+
+                // Get the current BlocksLanguageKey by PreviousData.ItemId
+                var currentKey = await _keyRepository.GetUilmResourceKey(x => x.ItemId == timeline.PreviousData.ItemId, "");
+                if (currentKey == null)
+                {
+                    _logger.LogWarning("Rollback failed - Key not found with ItemId: {ItemId}", timeline.PreviousData.ItemId);
+                    return new BaseMutationResponse
+                    {
+                        IsSuccess = false,
+                        Errors = new Dictionary<string, string>
+                        {
+                            { "Key", "Key not found in database" }
+                        }
+                    };
+                }
+
+                // Store current state for timeline
+                var rollbackFromKey = GetBlocksLanguageKey(currentKey);
+
+                // Update the key with previous data
+                currentKey.KeyName = timeline.PreviousData.KeyName;
+                // currentKey.ModuleId = timeline.PreviousData.ModuleId;
+                currentKey.Resources = timeline.PreviousData.Resources;
+                currentKey.Routes = timeline.PreviousData.Routes;
+                currentKey.IsPartiallyTranslated = timeline.PreviousData.IsPartiallyTranslated;
+                currentKey.LastUpdateDate = DateTime.UtcNow;
+
+                // Save the rolled back key
+                await _keyRepository.SaveKeyAsync(currentKey);
+
+                // Create timeline entry for the rollback operation
+                await CreateKeyTimelineEntryAsync(rollbackFromKey, currentKey, "Rollback");
+
+                _logger.LogInformation("Rollback operation completed successfully for ItemId: {ItemId}", request.ItemId);
+
+                return new BaseMutationResponse
+                {
+                    IsSuccess = true
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Rollback operation failed for ItemId: {ItemId}", request.ItemId);
+                return new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = new Dictionary<string, string>
+                    {
+                        { "Operation", "Rollback operation failed. Please try again." }
+                    }
+                };
+            }
+        }
+
         private async Task CreateKeyTimelineEntryAsync(BlocksLanguageKey? previousKey, BlocksLanguageKey currentKey, string logFrom)
         {
             try
