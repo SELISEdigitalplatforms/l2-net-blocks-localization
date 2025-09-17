@@ -528,7 +528,7 @@ namespace DomainService.Services
             await _messageClient.SendToConsumerAsync(
                 new ConsumerMessage<TranslateAllEvent>
                 {
-                    ConsumerName = Utilities.Constants.UilmQueue,
+                    ConsumerName = Utilities.Constants.TranslateAllKeysQueue,
                     Payload = new TranslateAllEvent
                     {
                         MessageCoRelationId = request.MessageCoRelationId,
@@ -1539,6 +1539,21 @@ namespace DomainService.Services
             }
         }
 
+        public async Task PublishEnvironmentDataMigrationNotification(bool response, string? messageCoRelationId, string projectKey, string targetedProjectKey)
+        {
+            var result = await _notificationService.NotifyEnvironmentDataMigrationEvent(response, messageCoRelationId, projectKey, targetedProjectKey);
+            if (result)
+            {
+                _logger.LogInformation("Notification: sent successfully for EnvironmentDataMigrationEvent with messageCoRelationId: {MessageCoRelationId}, ProjectKey: {ProjectKey}, TargetedProjectKey: {TargetedProjectKey}", 
+                    messageCoRelationId, projectKey, targetedProjectKey);
+            }
+            else
+            {
+                _logger.LogError("Notification: sending failed for EnvironmentDataMigrationEvent with messageCoRelationId: {MessageCoRelationId}, ProjectKey: {ProjectKey}, TargetedProjectKey: {TargetedProjectKey}", 
+                    messageCoRelationId, projectKey, targetedProjectKey);
+            }
+        }
+
         public async Task<BaseMutationResponse> DeleteCollectionsAsync(DeleteCollectionsRequest request)
         {
             _logger.LogInformation("Delete collections operation started");
@@ -1709,6 +1724,65 @@ namespace DomainService.Services
             catch (Exception ex)
             {
                 _logger.LogError("Failed to create timeline entry for Key {KeyId}: {Error}", currentKey.ItemId, ex.Message);
+                // Don't throw - timeline creation should not break the main operation
+            }
+        }
+
+        public async Task CreateBulkKeyTimelineEntriesAsync(List<BlocksLanguageKey> keys, string logFrom, string targetedProjectKey)
+        {
+            try
+            {
+                if (!keys.Any()) return;
+
+                var context = BlocksContext.GetContext();
+                var timelines = keys.Select(key => new KeyTimeline
+                {
+                    EntityId = key.ItemId,
+                    CurrentData = key,
+                    PreviousData = null, // For migration, we don't have previous data
+                    LogFrom = logFrom,
+                    UserId = context?.UserId ?? "System",
+                    CreateDate = DateTime.UtcNow,
+                    LastUpdateDate = DateTime.UtcNow
+                }).ToList();
+
+                await _keyTimelineRepository.BulkSaveKeyTimelinesAsync(timelines, targetedProjectKey);
+                _logger.LogInformation("Bulk timeline entries created for {Count} keys from {LogFrom}", keys.Count, logFrom);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Failed to create bulk timeline entries for {Count} keys: {Error}", keys.Count, ex.Message);
+                // Don't throw - timeline creation should not break the main operation
+            }
+        }
+
+        public async Task CreateBulkKeyTimelineEntriesAsync(List<BlocksLanguageKey> keys, List<BlocksLanguageKey> previousKeys, string logFrom, string targetedProjectKey)
+        {
+            try
+            {
+                if (!keys.Any()) return;
+
+                // Create a dictionary for quick lookup of previous keys by ItemId
+                var previousKeyDict = previousKeys?.ToDictionary(k => k.ItemId, k => k) ?? new Dictionary<string, BlocksLanguageKey>();
+
+                var context = BlocksContext.GetContext();
+                var timelines = keys.Select(key => new KeyTimeline
+                {
+                    EntityId = key.ItemId,
+                    CurrentData = key,
+                    PreviousData = previousKeyDict.TryGetValue(key.ItemId, out var previousKey) ? previousKey : null,
+                    LogFrom = logFrom,
+                    UserId = context?.UserId ?? "System",
+                    CreateDate = DateTime.UtcNow,
+                    LastUpdateDate = DateTime.UtcNow
+                }).ToList();
+
+                await _keyTimelineRepository.BulkSaveKeyTimelinesAsync(timelines, targetedProjectKey);
+                _logger.LogInformation("Bulk timeline entries created for {Count} keys from {LogFrom}", keys.Count, logFrom);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Failed to create bulk timeline entries for {Count} keys: {Error}", keys.Count, ex.Message);
                 // Don't throw - timeline creation should not break the main operation
             }
         }
