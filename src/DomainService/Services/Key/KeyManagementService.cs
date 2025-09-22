@@ -436,19 +436,37 @@ namespace DomainService.Services
 
             _logger.LogInformation("++JsonOutputGeneratorService: GenerateAsync execution successful!");
 
+            if(!string.IsNullOrWhiteSpace(command.ModuleId))
+            {
+                await _notificationService.NotifyExtensionEvent(true, command.ProjectKey);
+            }
+
             return true;
         }
 
         public List<UilmFile> ProcessUilmFile(GenerateUilmFilesEvent command, List<Language> languages, List<Key> resourceKeys, BlocksLanguageModule application)
         {
-
+            var keyLang = new Language
+            {
+                LanguageName = "key",
+                LanguageCode = "key",
+            };
+            if (languages.FindIndex(x => x.LanguageName == "key") == -1)
+            {
+                languages.Add(keyLang);
+            }
             List<UilmFile> uilmfiles = new List<UilmFile>();
             foreach (Language language in languages)
             {
                 Dictionary<string, object> dictionary = new Dictionary<string, object>();
-
-                AssignResourceKeysToDictionary(resourceKeys, language, dictionary);
-
+                if (language.LanguageCode == "key")
+                {
+                    AssignResourceKeysToDictionaryForKeyMode(resourceKeys, keyLang, dictionary);
+                }
+                else
+                {
+                    AssignResourceKeysToDictionary(resourceKeys, language, dictionary);
+                }
                 UilmFile uilmFile = new UilmFile()
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -474,6 +492,16 @@ namespace DomainService.Services
                 string resourceValue = resource == null ? "[ KEY MISSING ]" : resource.Value;
 
                 AssignToDictionary(dictionary: dictionary, keyPath: reosurceKey.KeyName, value: resourceValue);
+            });
+        }
+        private void AssignResourceKeysToDictionaryForKeyMode(
+           List<Key> resourceKeys,
+           Language language,
+           Dictionary<string, object> dictionary)
+        {
+            resourceKeys.ForEach((Key resourceKey) =>
+            {
+                AssignToDictionary(dictionary: dictionary, keyPath: resourceKey.KeyName, value: resourceKey.KeyName);
             });
         }
 

@@ -143,5 +143,43 @@ namespace DomainService.Services.HelperService
 
             return result1 == null ? false : result1.isSuccess;
         }
+
+        public async Task<bool> NotifyExtensionEvent(bool response, string projectKey) {
+            var requestData = new
+            {
+                ConnectionId = "",
+                Roles = new List<string> { },
+                UserIds = new List<string> { BlocksContext.GetContext()?.UserId ?? "" },
+                DenormalizedPayload = JsonSerializer.Serialize(new
+                {
+                    IsSuccess = response,
+                    title = "Extension Sync Completed",
+                    description = $"Extension Sync {(response ? "completed successfully" : "failed")}",
+                    projectKey = projectKey
+                }),
+                SaveDenormalizedPayloadAsAnObject = false,
+                ConfiguratoinName = "ExtensionGoLiveEvent",
+                ContentAvailable = true,
+                ResponseKey = "Extension Sync",
+                ResponseValue = response ? "Extension sync completed" : "Extension sync failed"
+            };
+
+            var blocksKey = projectKey;
+            var rootTenantId = projectKey;
+            var salt = _tenants.GetTenantByID(rootTenantId)?.TenantSalt;
+            var actulalSecret = _cryptoService.Hash(rootTenantId, salt);
+
+            var url = _configuration["NotificationServiceUrl"];
+            var headers = new Dictionary<string, string>
+            {
+                { "x-blocks-key", blocksKey },
+                { "Secret", actulalSecret}
+            };
+
+            var (result1, result2) = await _httpHelperServices.MakeHttpPostRequest<NotificationResponse>(
+                 requestData, url, headers);
+
+            return result1 == null ? false : result1.isSuccess;
+        }
     }
 }
