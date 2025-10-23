@@ -60,6 +60,11 @@ namespace Api.Controllers
             return await _languageManagementService.GetLanguagesAsync();
         }
 
+        /// <summary>
+        /// Deletes a specific language.
+        /// </summary>
+        /// <param name="request">The request containing the language name to delete.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the delete operation.</returns>
         [HttpDelete]
         [Authorize]
         public async Task<IActionResult> Delete([FromQuery] DeleteLanguageRequest request)
@@ -83,6 +88,11 @@ namespace Api.Controllers
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
+        /// <summary>
+        /// Sets the default language.
+        /// </summary>
+        /// <param name="request">The request containing the language name to set as default.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the operation.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> SetDefault(SetDefaultLanguageRequest request)
