@@ -78,9 +78,10 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Retrieves all available Keys.
+        /// Retrieves all available keys based on applied filters.
         /// </summary>
-        /// <returns>A list of <see cref="Key"/> objects.</returns>
+        /// <param name="query">The query parameters containing filters for key retrieval.</param>
+        /// <returns>A <see cref="GetKeysQueryResponse"/> containing the filtered list of keys.</returns>
         [HttpPost]
         [Authorize]
         public async Task<GetKeysQueryResponse> Gets([FromBody] GetKeysRequest query)
@@ -104,6 +105,11 @@ namespace Api.Controllers
             return await _keyManagementService.GetKeyTimelineAsync(query);
         }
 
+        /// <summary>
+        /// Retrieves a specific key by item ID.
+        /// </summary>
+        /// <param name="request">The request containing the item ID of the key to retrieve.</param>
+        /// <returns>A <see cref="Key"/> object if found; otherwise, null.</returns>
         [HttpGet]
         [Authorize]
         public async Task<Key?> Get([FromQuery] GetKeyRequest request)
@@ -129,6 +135,11 @@ namespace Api.Controllers
             return result;
         }
 
+        /// <summary>
+        /// Deletes a specific key by item ID.
+        /// </summary>
+        /// <param name="request">The request containing the item ID of the key to delete.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the delete operation.</returns>
         [HttpDelete]
         [Authorize]
         public async Task<IActionResult> Delete([FromQuery] DeleteKeyRequest request)
@@ -152,6 +163,11 @@ namespace Api.Controllers
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
+        /// <summary>
+        /// Returns a JSON UILM file for a specified module and language.
+        /// </summary>
+        /// <param name="request">The request containing the project key, module, and language information.</param>
+        /// <returns>A JSON UILM file as a string.</returns>
         [HttpGet]
         public async Task GetUilmFile([FromQuery] GetUilmFileRequest request)
         {
@@ -169,6 +185,11 @@ namespace Api.Controllers
             await Response.WriteAsync(result ?? "");
         }
 
+        /// <summary>
+        /// Generates a UILM file for download. Must be called before calling /key/getuilmfile.
+        /// </summary>
+        /// <param name="request">The request containing the parameters for UILM file generation.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the file generation request.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> GenerateUilmFile([FromBody] GenerateUilmFilesRequest request)
@@ -180,6 +201,11 @@ namespace Api.Controllers
             return Ok(new BaseMutationResponse { IsSuccess = true });
         }
 
+        /// <summary>
+        /// Translates all keys without values. If a module is specified, only keys from that module are translated.
+        /// </summary>
+        /// <param name="request">The request containing the project key and optional module filter.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the translation request.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> TranslateAll(TranslateAllRequest request)
@@ -229,6 +255,11 @@ namespace Api.Controllers
             return Ok(new BaseMutationResponse { IsSuccess = true });
         }
 
+        /// <summary>
+        /// Imports a UILM file. Existing keys are updated. Existing modules are not replaced. New keys are added; removed keys are ignored.
+        /// </summary>
+        /// <param name="request">The request containing the UILM file data and project key.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the import operation.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> UilmImport([FromBody] UilmImportRequest request)
@@ -251,6 +282,11 @@ namespace Api.Controllers
             return Ok(new BaseMutationResponse { IsSuccess = true });
         }
 
+        /// <summary>
+        /// Exports all modules or selected ones with their keys.
+        /// </summary>
+        /// <param name="request">The request containing the project key and optional module selection for export.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the export operation.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> UilmExport([FromBody] UilmExportRequest request)
@@ -275,12 +311,13 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Deletes all data from specified collections.
+        /// Deletes entire key collections. (Admin use only; to be removed from public API.)
         /// </summary>
-        /// <param name="request">The request containing the list of collections to delete from.</param>
+        /// <param name="request">The request containing the list of collections to delete.</param>
         /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the delete operation.</returns>
         [HttpPost]
         [Authorize]
+        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> DeleteCollections([FromBody] DeleteCollectionsRequest request)
         {
             if (request == null) return BadRequest(new BaseMutationResponse());
@@ -330,6 +367,11 @@ namespace Api.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Reverts keys to a previous state.
+        /// </summary>
+        /// <param name="request">The request containing the item ID and rollback parameters.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the rollback operation.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> RollBack([FromBody] RollbackRequest request)
