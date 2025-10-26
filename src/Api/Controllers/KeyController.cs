@@ -4,6 +4,7 @@ using DomainService.Services;
 using DomainService.Shared;
 using DomainService.Shared.Events;
 using DomainService.Utilities;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Mvc;
@@ -22,19 +23,24 @@ namespace Api.Controllers
     {
         private readonly IKeyManagementService _keyManagementService;
         private readonly ChangeControllerContext _changeControllerContext;
+        private readonly IValidator<TranslateBlocksLanguageKeyRequest> _translateBlocksLanguageKeyRequestValidator;
 
 
         /// <summary>
         /// Initializes a new instance of the <see cref="KeyController"/> class.
         /// </summary>
         /// <param name="keyManagementService">The service for managing keys.</param>
+        /// <param name="changeControllerContext">The context for changing controller state.</param>
+        /// <param name="translateBlocksLanguageKeyRequestValidator">The validator for TranslateBlocksLanguageKeyRequest.</param>
 
         public KeyController(
             IKeyManagementService keyManagementService,
-            ChangeControllerContext changeControllerContext)
+            ChangeControllerContext changeControllerContext,
+            IValidator<TranslateBlocksLanguageKeyRequest> translateBlocksLanguageKeyRequestValidator)
         {
             _keyManagementService = keyManagementService;
             _changeControllerContext = changeControllerContext;
+            _translateBlocksLanguageKeyRequestValidator = translateBlocksLanguageKeyRequestValidator;
         }
 
         /// <summary>
@@ -53,9 +59,29 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Retrieves all available Keys.
+        /// Saves multiple keys to the system in a single operation.
         /// </summary>
-        /// <returns>A list of <see cref="Key"/> objects.</returns>
+        /// <param name="keys">The list of key objects to be saved.</param>
+        /// <returns>An <see cref="ApiResponse"/> indicating the success or failure of the bulk save operation.</returns>
+        [HttpPost]
+        [Authorize]
+        public async Task<ApiResponse> SaveKeys([FromBody] List<Key> keys)
+        {
+            if (keys == null || !keys.Any()) 
+                return new ApiResponse("Keys list cannot be null or empty.");
+            
+            // Set context for the first key if available (for tenant/project context)
+            if (keys.Any())
+                _changeControllerContext.ChangeContext(keys.First());
+            
+            return await _keyManagementService.SaveKeysAsync(keys);
+        }
+
+        /// <summary>
+        /// Retrieves all available keys based on applied filters.
+        /// </summary>
+        /// <param name="query">The query parameters containing filters for key retrieval.</param>
+        /// <returns>A <see cref="GetKeysQueryResponse"/> containing the filtered list of keys.</returns>
         [HttpPost]
         [Authorize]
         public async Task<GetKeysQueryResponse> Gets([FromBody] GetKeysRequest query)
@@ -79,6 +105,11 @@ namespace Api.Controllers
             return await _keyManagementService.GetKeyTimelineAsync(query);
         }
 
+        /// <summary>
+        /// Retrieves a specific key by item ID.
+        /// </summary>
+        /// <param name="request">The request containing the item ID of the key to retrieve.</param>
+        /// <returns>A <see cref="Key"/> object if found; otherwise, null.</returns>
         [HttpGet]
         [Authorize]
         public async Task<Key?> Get([FromQuery] GetKeyRequest request)
@@ -104,6 +135,11 @@ namespace Api.Controllers
             return result;
         }
 
+        /// <summary>
+        /// Deletes a specific key by item ID.
+        /// </summary>
+        /// <param name="request">The request containing the item ID of the key to delete.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the delete operation.</returns>
         [HttpDelete]
         [Authorize]
         public async Task<IActionResult> Delete([FromQuery] DeleteKeyRequest request)
@@ -127,6 +163,11 @@ namespace Api.Controllers
             return result.IsSuccess ? Ok(result) : BadRequest(result);
         }
 
+        /// <summary>
+        /// Returns a JSON UILM file for a specified module and language.
+        /// </summary>
+        /// <param name="request">The request containing the project key, module, and language information.</param>
+        /// <returns>A JSON UILM file as a string.</returns>
         [HttpGet]
         public async Task GetUilmFile([FromQuery] GetUilmFileRequest request)
         {
@@ -144,6 +185,11 @@ namespace Api.Controllers
             await Response.WriteAsync(result ?? "");
         }
 
+        /// <summary>
+        /// Generates a UILM file for download. Must be called before calling /key/getuilmfile.
+        /// </summary>
+        /// <param name="request">The request containing the parameters for UILM file generation.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the file generation request.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> GenerateUilmFile([FromBody] GenerateUilmFilesRequest request)
@@ -155,8 +201,13 @@ namespace Api.Controllers
             return Ok(new BaseMutationResponse { IsSuccess = true });
         }
 
+        /// <summary>
+        /// Translates all keys without values. If a module is specified, only keys from that module are translated.
+        /// </summary>
+        /// <param name="request">The request containing the project key and optional module filter.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the translation request.</returns>
         [HttpPost]
-        //[Authorize]
+        [Authorize]
         public async Task<IActionResult> TranslateAll(TranslateAllRequest request)
         {
             if (request == null) BadRequest(new BaseMutationResponse());
@@ -178,6 +229,37 @@ namespace Api.Controllers
             return Ok(new BaseMutationResponse { IsSuccess = true });
         }
 
+        /// <summary>
+        /// Translates a specific BlocksLanguageKey by sending it to the translation queue.
+        /// </summary>
+        /// <param name="request">The request containing key ID, project key, and translation parameters.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the translation request.</returns>
+        [HttpPost]
+        [Authorize]
+        public async Task<IActionResult> TranslateKey(TranslateBlocksLanguageKeyRequest request)
+        {
+            if (request == null) return BadRequest(new BaseMutationResponse());
+            _changeControllerContext.ChangeContext(request);
+
+            var validationResult = await _translateBlocksLanguageKeyRequestValidator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(new BaseMutationResponse
+                {
+                    IsSuccess = false,
+                    Errors = validationResult.Errors.ToDictionary(e => e.PropertyName, e => e.ErrorMessage)
+                });
+            }
+
+            await _keyManagementService.SendTranslateBlocksLanguageKeyEvent(request);
+            return Ok(new BaseMutationResponse { IsSuccess = true });
+        }
+
+        /// <summary>
+        /// Imports a UILM file. Existing keys are updated. Existing modules are not replaced. New keys are added; removed keys are ignored.
+        /// </summary>
+        /// <param name="request">The request containing the UILM file data and project key.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the import operation.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> UilmImport([FromBody] UilmImportRequest request)
@@ -200,6 +282,11 @@ namespace Api.Controllers
             return Ok(new BaseMutationResponse { IsSuccess = true });
         }
 
+        /// <summary>
+        /// Exports all modules or selected ones with their keys.
+        /// </summary>
+        /// <param name="request">The request containing the project key and optional module selection for export.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the export operation.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> UilmExport([FromBody] UilmExportRequest request)
@@ -224,12 +311,13 @@ namespace Api.Controllers
         }
 
         /// <summary>
-        /// Deletes all data from specified collections.
+        /// Deletes entire key collections. (Admin use only; to be removed from public API.)
         /// </summary>
-        /// <param name="request">The request containing the list of collections to delete from.</param>
+        /// <param name="request">The request containing the list of collections to delete.</param>
         /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the delete operation.</returns>
         [HttpPost]
         [Authorize]
+        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> DeleteCollections([FromBody] DeleteCollectionsRequest request)
         {
             if (request == null) return BadRequest(new BaseMutationResponse());
@@ -279,6 +367,11 @@ namespace Api.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Reverts keys to a previous state.
+        /// </summary>
+        /// <param name="request">The request containing the item ID and rollback parameters.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the rollback operation.</returns>
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> RollBack([FromBody] RollbackRequest request)
