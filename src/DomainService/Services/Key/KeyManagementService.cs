@@ -17,6 +17,7 @@ using Newtonsoft.Json;
 using StorageDriver;
 using System.Globalization;
 using System.Text;
+using System.Xml.Linq;
 
 namespace DomainService.Services
 {
@@ -797,11 +798,11 @@ namespace DomainService.Services
                 _format = "CSV";
                 return await ImportCsvFile(stream, fileData);
             }
-            //else if (fileData.Name.EndsWith(".xlf"))
-            //{
-            //    _format = "XLF";
-            //    return await ImportXlfFile(stream, fileData);
-            //}
+            else if (fileData.Name.EndsWith(".xlf"))
+            {
+                _format = "XLF";
+                return await ImportXlfFile(stream, fileData);
+            }
 
             return false;
         }
@@ -1198,6 +1199,158 @@ namespace DomainService.Services
             }
         }
 
+        private async Task<bool> ImportXlfFile(Stream stream, FileResponse fileData)
+        {
+            try
+            {
+                var languageJsonModels = ExtractModelsFromXlf(stream);
+                var dbApplications = await GetLanguageApplications(null);
+                await ProcessJsonFile(dbApplications, languageJsonModels);
+
+                _logger.LogInformation("ImportXlfFile: Successfully imported FileId:{id}, FileName: {name}", fileData.ItemId, fileData.Name);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("ImportXlfFile: Failed to import FileId:{id}, FileName: {name}, Error: {ex}", fileData.ItemId, fileData.Name, ex);
+                return false;
+            }
+        }
+
+        private static List<LanguageJsonModel> ExtractModelsFromXlf(Stream stream)
+        {
+            var memoryStream = stream as MemoryStream;
+            var dataStream = new MemoryStream();
+            dataStream.Write(memoryStream.ToArray(), 0, memoryStream.ToArray().Length);
+            dataStream.Seek(0, SeekOrigin.Begin);
+
+            XNamespace ns = "urn:oasis:names:tc:xliff:document:1.2";
+            var document = XDocument.Load(dataStream);
+
+            var languageJsonModels = new Dictionary<string, LanguageJsonModel>();
+
+            // Parse all <file> elements
+            var fileElements = document.Root?.Elements(ns + "file");
+            if (fileElements == null)
+            {
+                return new List<LanguageJsonModel>();
+            }
+
+            foreach (var fileElement in fileElements)
+            {
+                var sourceLanguage = fileElement.Attribute("source-language")?.Value;
+                var targetLanguage = fileElement.Attribute("target-language")?.Value;
+                var moduleName = fileElement.Attribute("original")?.Value;
+
+                var body = fileElement.Element(ns + "body");
+                if (body == null) continue;
+
+                // Parse all <trans-unit> elements
+                var transUnits = body.Elements(ns + "trans-unit");
+                foreach (var transUnit in transUnits)
+                {
+                    var transUnitId = transUnit.Attribute("id")?.Value;
+                    var keyName = transUnit.Attribute("resname")?.Value;
+
+                    if (string.IsNullOrEmpty(keyName)) continue;
+
+                    // Extract ItemId from trans-unit id (format: ItemId_Culture)
+                    var itemId = transUnitId?.Split('_')[0];
+
+                    var sourceElement = transUnit.Element(ns + "source");
+                    var targetElement = transUnit.Element(ns + "target");
+                    var noteElements = transUnit.Elements(ns + "note");
+
+                    var sourceValue = sourceElement?.Value;
+                    var targetValue = targetElement?.Value;
+                    var targetState = targetElement?.Attribute("state")?.Value;
+
+                    // Extract metadata from notes
+                    string moduleId = null;
+                    var routes = new List<string>();
+                    int characterLength = 0;
+
+                    foreach (var note in noteElements)
+                    {
+                        var noteValue = note.Value;
+                        if (noteValue.StartsWith("Module:"))
+                        {
+                            // Module name is already in fileElement.Attribute("original")
+                        }
+                        else if (noteValue.StartsWith("Routes:"))
+                        {
+                            var routesStr = noteValue.Replace("Routes:", "").Trim();
+                            routes = routesStr.Split(',').Select(r => r.Trim()).ToList();
+                        }
+                        else if (noteValue.StartsWith("CharacterLength:"))
+                        {
+                            var charLengthStr = noteValue.Replace("CharacterLength:", "").Trim();
+                            int.TryParse(charLengthStr, out characterLength);
+                        }
+                    }
+
+                    // Create or update LanguageJsonModel
+                    if (!languageJsonModels.ContainsKey(keyName))
+                    {
+                        languageJsonModels[keyName] = new LanguageJsonModel
+                        {
+                            _id = itemId,
+                            Module = moduleName,
+                            KeyName = keyName,
+                            Resources = new List<Resource>().ToArray(),
+                            Routes = routes,
+                            IsPartiallyTranslated = targetState == "needs-translation"
+                        };
+                    }
+
+                    var model = languageJsonModels[keyName];
+
+                    // Add or update resources
+                    var resourceList = model.Resources?.ToList() ?? new List<Resource>();
+
+                    // Add source language resource if not exists
+                    if (!string.IsNullOrEmpty(sourceLanguage) && !string.IsNullOrEmpty(sourceValue))
+                    {
+                        var sourceResource = resourceList.FirstOrDefault(r => r.Culture == sourceLanguage);
+                        if (sourceResource == null)
+                        {
+                            resourceList.Add(new Resource
+                            {
+                                Culture = sourceLanguage,
+                                Value = sourceValue,
+                                CharacterLength = 0
+                            });
+                        }
+                    }
+
+                    // Add target language resource
+                    if (!string.IsNullOrEmpty(targetLanguage))
+                    {
+                        var targetResource = resourceList.FirstOrDefault(r => r.Culture == targetLanguage);
+                        if (targetResource == null)
+                        {
+                            resourceList.Add(new Resource
+                            {
+                                Culture = targetLanguage,
+                                Value = targetValue ?? string.Empty,
+                                CharacterLength = characterLength
+                            });
+                        }
+                        else
+                        {
+                            // Update existing target resource
+                            targetResource.Value = targetValue ?? string.Empty;
+                            targetResource.CharacterLength = characterLength;
+                        }
+                    }
+
+                    model.Resources = resourceList.ToArray();
+                }
+            }
+
+            return languageJsonModels.Values.ToList();
+        }
+
         private async Task ProcessExcelCells(IXLWorksheet worksheet, Dictionary<string, string> columns, Dictionary<string, string> languages,
             List<BlocksLanguageKey> uilmResourceKeys)
         {
@@ -1556,6 +1709,8 @@ namespace DomainService.Services
                     return await GenerateJsonFile(languageApplications, languageResourceKeys, request.FileId, languageSettings);
                 case OutputType.Csv:
                     return await GenerateCsvFile(languageApplications, languageResourceKeys, request.FileId, languageSettings);
+                case OutputType.Xlf:
+                    return await GenerateXlfFile(languageApplications, languageResourceKeys, request.FileId, languageSettings);
                 default:
                     return false;
             }
@@ -1660,10 +1815,10 @@ namespace DomainService.Services
             List<BlocksLanguageKey> resourceKeys, string fileId, BlocksLanguage languageSetting)
         {
             var csvOutputGenerator = _serviceProvider.GetService<CsvOutputGeneratorService>();
-            
+
             // Get all languages from BlocksLanguage collection
             var allLanguages = await _keyRepository.GetAllLanguagesAsync(string.Empty);
-            
+
             var stream = await csvOutputGenerator.GenerateAsync<MemoryStream>(allLanguages, applications, resourceKeys, languageSetting.LanguageCode);
             if (stream is null)
             {
@@ -1672,6 +1827,25 @@ namespace DomainService.Services
             }
             var csvFileName = "uilm_csv_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".csv";
             return await SaveUilmFile(fileId, csvFileName, stream);
+        }
+
+        private async Task<bool> GenerateXlfFile(List<BlocksLanguageModule> applications,
+            List<BlocksLanguageKey> resourceKeys, string fileId, BlocksLanguage languageSetting)
+        {
+            var xlfOutputGenerator = _serviceProvider.GetService<XlfOutputGeneratorService>();
+
+            // Get all languages from BlocksLanguage collection
+            var allLanguages = await _keyRepository.GetAllLanguagesAsync(string.Empty);
+
+            var stream = await xlfOutputGenerator.GenerateAsync<MemoryStream>(allLanguages, applications, resourceKeys, languageSetting.LanguageCode);
+            if (stream is null)
+            {
+                _logger.LogError("GenerateAndWriteFile: XLF ZIP Stream is null");
+                return false;
+            }
+            // XLF export generates a ZIP file containing individual .xlf files for each language
+            var xlfZipFileName = "uilm_xlf_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".zip";
+            return await SaveUilmFile(fileId, xlfZipFileName, stream);
         }
 
         private async Task<List<BlocksLanguageKey>> GetLanguageResourceKeys(List<string> appIds = null, DateTime startDate = default, DateTime endDate = default)

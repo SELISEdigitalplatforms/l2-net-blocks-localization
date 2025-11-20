@@ -29,6 +29,7 @@ namespace Worker
             services.AddSingleton<XlsxOutputGeneratorService>();
             services.AddSingleton<JsonOutputGeneratorService>();
             services.AddSingleton<CsvOutputGeneratorService>();
+            services.AddSingleton<XlfOutputGeneratorService>();
 
             services.AddSingleton<IModuleManagementService, ModuleManagementService>();
             services.AddSingleton<IModuleRepository, ModuleRepository>();
