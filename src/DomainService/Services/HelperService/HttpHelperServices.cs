@@ -1,4 +1,8 @@
 ﻿using Blocks.Genesis;
+using DomainService.Shared.Entities;
+using Microsoft.Extensions.Logging;
+using Polly.CircuitBreaker;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -8,11 +12,15 @@ namespace DomainService.Services.HelperService
     {
         private readonly IHttpService _httpService;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<HttpHelperServices> _logger;
+        private readonly HttpClient _httpClient;
 
-        public HttpHelperServices(IHttpService httpService, IHttpClientFactory httpClientFactory)
+        public HttpHelperServices(IHttpService httpService, IHttpClientFactory httpClientFactory, ILogger<HttpHelperServices> logger, HttpClient httpClient)
         {
             _httpService = httpService;
             _httpClientFactory = httpClientFactory;
+            _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<(T?, string)> MakeHttpGetRequest<T>(string url, string token = null, Dictionary<string, string> headers = null) where T : class
@@ -99,6 +107,73 @@ namespace DomainService.Services.HelperService
             }
         }
 
+        public async Task<bool> MakeHttpRequestForWebhook(object payload, BlocksWebhook webhook)
+        {
+            using (var request = new HttpRequestMessage(HttpMethod.Post, webhook.Url))
+            {
+                using (request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, webhook.ContentType))
+                {
+                    if (webhook.BlocksWebhookSecret != null)
+                    {
+                        request.Headers.Add(webhook.BlocksWebhookSecret.HeaderKey, webhook.BlocksWebhookSecret.Secret);
+                    }
+
+                    try
+                    {
+                        var response = await MakeRequestAsync(request);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var result = response.Content.ReadAsStringAsync().Result;
+                            _logger.LogInformation("Result:  {result}", JsonSerializer.Serialize(result));
+                            return true;
+                        }
+                        else
+                        {
+                            _logger.LogError("Error: {response}", JsonSerializer.Serialize(response));
+                            return false;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.LogError("Error: {error}", JsonSerializer.Serialize(e));
+                        return false;
+                    }
+                }
+            }
+        }
+
+        public async Task<HttpResponseMessage> MakeRequestAsync(HttpRequestMessage httpRequestMessage)
+        {
+            var requestResponse = new HttpResponseMessage();
+
+            try
+            {
+                _logger.LogInformation($"Started processing the API request. MethodType: {httpRequestMessage.Method}, " +
+                    $"BaseUrl: {_httpClient.BaseAddress}, ApiName: {httpRequestMessage.RequestUri}");
+
+
+                requestResponse = await _httpClient.SendAsync(httpRequestMessage);
+
+                // response.HttpStatusCode = requestResponse.StatusCode;
+                // response.ResponseData = await requestResponse.Content.ReadAsStringAsync();
+
+                _logger.LogInformation($"Completed processing the API request. MethodType: " +
+                    $"{httpRequestMessage.Method}, BaseUrl: {_httpClient.BaseAddress}, " +
+                    $"ApiName: {httpRequestMessage.RequestUri}" +
+                    $"SerializedResponse: {JsonSerializer.Serialize(requestResponse)}");
+            }
+            catch (BrokenCircuitException ex)
+            {
+                _logger.LogError($"Circuit breaker Exception occurred while processing the API request. " +
+                    $"MethodType: {httpRequestMessage.Method}, BaseUrl: {_httpClient.BaseAddress}, " +
+                    $"ApiName: {httpRequestMessage.RequestUri}, Reason: {ex.Message}");
+
+                throw;
+            }
+
+            return requestResponse;
+        }
+        
 
     }
 }
