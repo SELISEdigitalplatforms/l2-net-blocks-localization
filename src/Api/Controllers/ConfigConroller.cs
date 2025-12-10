@@ -1,8 +1,8 @@
 using Blocks.Genesis;
-using DomainService.Repositories;
 using DomainService.Services.HelperService;
 using DomainService.Shared;
 using DomainService.Shared.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers
@@ -27,7 +27,7 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        [ProtectedEndPoint]
+        [Authorize]
         //[ApiExplorerSettings(IgnoreApi = true)]
         public async Task<ApiResponse> SaveWebHook([FromBody] BlocksWebhook webhook)
         {
