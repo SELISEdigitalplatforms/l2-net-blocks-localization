@@ -32,7 +32,11 @@ namespace XUnitTest
                     TenantSalt = "salt",
                     ApplicationDomain = "",
                     DbConnectionString = "",
-                    JwtTokenParameters = new JwtTokenParameters()
+                    JwtTokenParameters = new JwtTokenParameters
+                    {
+                        PrivateCertificatePassword = "password",
+                        IssueDate = DateTime.UtcNow
+                    }
                 });
             _cryptoMock.Setup(c => c.Hash("root", "salt")).Returns("hashed");
 
@@ -70,7 +74,12 @@ namespace XUnitTest
             await _service.NotifyTranslateAllEvent(true, "corr");
 
             _cryptoMock.Verify(c => c.Hash("root", "salt"), Times.AtLeastOnce);
-            _httpHelperMock.Verify(h => h.MakeHttpPostRequest<NotificationResponse>(It.IsAny<object>(), "http://notify", It.Is<Dictionary<string, string>>(d => d["Secret"] == "hashed")), Times.Once);
+            _httpHelperMock.Verify(h => h.MakeHttpPostRequest<NotificationResponse>(
+                It.IsAny<object>(),
+                It.IsAny<string>(),
+                It.Is<Dictionary<string, string>>(d => d["Secret"] == "hashed"),
+                It.IsAny<string>(),
+                It.IsAny<string>()), Times.Once);
         }
     }
 }

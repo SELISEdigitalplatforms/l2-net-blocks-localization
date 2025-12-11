@@ -29,8 +29,11 @@ namespace XUnitTest
         public async Task MakeHttpGetRequest_ReturnsData()
         {
             var response = new SampleDto { Value = "ok" };
-            _httpServiceMock.Setup(x => x.Get<SampleDto>("http://test", It.IsAny<Dictionary<string, string>>()))
-                .ReturnsAsync((response, "raw"));
+
+            // Use Returns with delegate to avoid expression tree limitations with optional parameters
+            _httpServiceMock
+                .Setup(x => x.Get<SampleDto>(It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult((response, "raw")));
 
             var service = new HttpHelperServices(_httpServiceMock.Object, _httpClientFactoryMock.Object, _loggerMock.Object, new HttpClient(new PassThroughHandler()));
 
@@ -45,8 +48,10 @@ namespace XUnitTest
         public async Task MakeHttpPostRequest_ReturnsData()
         {
             var response = new SampleDto { Value = "posted" };
-            _httpServiceMock.Setup(x => x.Post<SampleDto>(It.IsAny<object>(), "http://post", It.IsAny<string>(), It.IsAny<Dictionary<string, string>>()))
-                .ReturnsAsync((response, "raw"));
+
+            _httpServiceMock
+                .Setup(x => x.Post<SampleDto>(It.IsAny<object>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult((response, "raw")));
 
             var service = new HttpHelperServices(_httpServiceMock.Object, _httpClientFactoryMock.Object, _loggerMock.Object, new HttpClient(new PassThroughHandler()));
 
@@ -128,7 +133,8 @@ namespace XUnitTest
             {
                 Url = "http://example.com/webhook",
                 ContentType = "application/json",
-                BlocksWebhookSecret = new BlocksWebhookSecret { HeaderKey = "X-Sig", Secret = "abc" }
+                BlocksWebhookSecret = new BlocksWebhookSecret { HeaderKey = "X-Sig", Secret = "abc" },
+                ProjectKey = "test-project"
             };
 
             var result = await service.MakeHttpRequestForWebhook(new { ok = true }, webhook);
@@ -151,7 +157,9 @@ namespace XUnitTest
             var webhook = new BlocksWebhook
             {
                 Url = "http://example.com/webhook",
-                ContentType = "application/json"
+                ContentType = "application/json",
+                BlocksWebhookSecret = new BlocksWebhookSecret { HeaderKey = "key", Secret = "secret" },
+                ProjectKey = "test-project"
             };
 
             var result = await service.MakeHttpRequestForWebhook(new { ok = true }, webhook);
