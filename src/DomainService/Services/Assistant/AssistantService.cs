@@ -156,14 +156,26 @@ namespace DomainService.Services
 
         private string GetDecryptedSecret(string encryptedText)
         {
-            var salt = GetSalt();
-            if (salt is null)
+            try
             {
-                throw new ArgumentException("Salt is null");
-            }
+                _logger.LogInformation($"Attempting decryption. EncryptedText length: {encryptedText?.Length}, Key length: {_key?.Length}");
 
-            var decryptedValue = Decrypt(encryptedText, _key, salt);
-            return decryptedValue;
+                var salt = GetSalt();
+                if (salt is null)
+                {
+                    throw new ArgumentException("Salt is null");
+                }
+
+                _logger.LogInformation($"Salt length: {salt.Length}");
+
+                var decryptedValue = Decrypt(encryptedText, _key, salt);
+                return decryptedValue;
+            }
+            catch (CryptographicException ex)
+            {
+                _logger.LogError($"Decryption failed. This usually means the encrypted value was created with different key/salt. Error: {ex.Message}");
+                throw;
+            }
         }
 
         public byte[] GetSalt()
@@ -191,9 +203,10 @@ namespace DomainService.Services
 
             using (var aesAlg = Aes.Create())
             {
-                var keyDerivationFunction = new Rfc2898DeriveBytes(key, salt);
+                var keyDerivationFunction = new Rfc2898DeriveBytes(key, salt, 1000, HashAlgorithmName.SHA256);
                 aesAlg.Key = keyDerivationFunction.GetBytes(aesAlg.KeySize / 8);
                 aesAlg.IV = keyDerivationFunction.GetBytes(aesAlg.BlockSize / 8);
+                aesAlg.Padding = PaddingMode.PKCS7; // Explicitly set padding mode
 
                 var decryptor = aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
 
