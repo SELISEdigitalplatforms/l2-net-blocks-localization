@@ -22,40 +22,12 @@ jobs:
         run: |
           dotnet restore "./${{ env.SOLUTION_NAME }}" -s https://api.nuget.org/v3/index.json -s https://nuget.selise.biz/nuget
           dotnet build "./${{ env.SOLUTION_NAME }}" --no-incremental
-          dotnet test XUnitTest/XUnitTest.csproj `
-            --no-build `
-            --collect:"XPlat Code Coverage" `
-            --logger:"trx;LogFileName=test-results.trx"
-
-      - name: Install ReportGenerator
-        shell: pwsh
-        run: dotnet tool install --tool-path ./tools dotnet-reportgenerator-globaltool
-
-      - name: Install trx2junit
-        shell: pwsh
-        run: dotnet tool install --tool-path ./tools trx2junit
-
-      - name: Show Coverage Summary
-        shell: pwsh
-        run: |
-          $cov = Get-ChildItem -Recurse ./src/XUnitTest/TestResults -Filter coverage.cobertura.xml | Select-Object -First 1
-          if (-not $cov) { Write-Error "No coverage.cobertura.xml found"; exit 1 }
-          ./tools/reportgenerator -reports:$cov.FullName -targetdir:coverage-report -reporttypes:"TextSummary"
-          Get-Content coverage-report/Summary.txt
-
-      - name: Convert TRX to JUnit
-        shell: pwsh
-        run: |
-          $trx = Get-ChildItem -Recurse ./src/XUnitTest/TestResults -Filter *.trx
-          if (-not $trx) { Write-Error "No TRX file found to convert"; exit 1 }
-          New-Item -ItemType Directory -Force -Path ./src/XUnitTest/TestResults/junit | Out-Null
-          foreach ($f in $trx) {
-            ./tools/trx2junit $f.FullName --out ./src/XUnitTest/TestResults/junit
-          }
+          dotnet test ./XUnitTest/XUnitTest.csproj /p:CollectCoverage=true --no-build --collect:"XPlat Code Coverage"
+          dotnet test "./XUnitTest/XUnitTest.csproj" --no-build --verbosity normal --logger:"junit;LogFilePath=test-results/xunit_results.xml"
           
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v1
         id: test-results
         if: always()
         with:
-          files: "./src/XUnitTest/TestResults/junit/*.xml"
+          files: "./src/XUnitTest/test-results/*.xml"
