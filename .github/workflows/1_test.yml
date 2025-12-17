@@ -31,6 +31,10 @@ jobs:
         shell: pwsh
         run: dotnet tool install --tool-path ./tools dotnet-reportgenerator-globaltool
 
+      - name: Install trx2junit
+        shell: pwsh
+        run: dotnet tool install --tool-path ./tools trx2junit
+
       - name: Show Coverage Summary
         shell: pwsh
         run: |
@@ -38,10 +42,17 @@ jobs:
           if (-not $cov) { Write-Error "No coverage.cobertura.xml found"; exit 1 }
           ./tools/reportgenerator -reports:$cov.FullName -targetdir:coverage-report -reporttypes:"TextSummary"
           Get-Content coverage-report/Summary.txt
+
+      - name: Convert TRX to JUnit
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Recurse ./src/XUnitTest/TestResults -Filter *.trx | Select-Object -First 1
+          if (-not $trx) { Write-Error "No TRX file found to convert"; exit 1 }
+          ./tools/trx2junit $trx.FullName -o ./src/XUnitTest/TestResults/junit
           
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v1
         id: test-results
         if: always()
         with:
-          files: "./src/XUnitTest/TestResults/**/*.trx"
+          files: "./src/XUnitTest/TestResults/junit/*.xml"
