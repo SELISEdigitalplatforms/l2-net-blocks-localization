@@ -46,9 +46,11 @@ jobs:
       - name: Convert TRX to JUnit
         shell: pwsh
         run: |
-          $trx = Get-ChildItem -Recurse ./src/XUnitTest/TestResults -Filter *.trx | Select-Object -First 1
+          $trx = Get-ChildItem -Recurse ./src/XUnitTest/TestResults -Filter *.trx
           if (-not $trx) { Write-Error "No TRX file found to convert"; exit 1 }
-          ./tools/trx2junit $trx.FullName -o ./src/XUnitTest/TestResults/junit
+          foreach ($f in $trx) {
+            ./tools/trx2junit $f.FullName -o ./src/XUnitTest/TestResults/junit
+          }
           
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v1
