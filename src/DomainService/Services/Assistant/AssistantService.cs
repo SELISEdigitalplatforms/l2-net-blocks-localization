@@ -14,7 +14,6 @@ namespace DomainService.Services
     {
         private readonly ILogger<AssistantService> _logger;
         private readonly IConfiguration _configuration;
-        private readonly string _key;
         private readonly string _aiCompletionUrl;
         private readonly string _chatGptTemperature;
         private readonly HttpClient _httpClient;
@@ -33,7 +32,6 @@ namespace DomainService.Services
             _aiCompletionUrl = _configuration["AiCompletionUrl"];
             _chatGptTemperature = _configuration["ChatGptTemperature"];
             _httpClient = httpClient;
-            _key = _localizationSecret.ChatGptEncryptionKey;
         }
 
 
@@ -81,6 +79,11 @@ namespace DomainService.Services
 
         public string FormatAiTextForSuggestTranslation(string aiText)
         {
+            if (aiText == null)
+            {
+                _logger.LogError("FormatAiTextForSuggestTranslation -> aiText is null");
+                return String.Empty;
+            }
             string output = null;
 
             var trimmedAiText = aiText?.Replace("\"", "").Replace("'", "");
@@ -107,18 +110,13 @@ namespace DomainService.Services
                 double.TryParse(_chatGptTemperature, out var temperature);
                 TemperatureValidator(temperature);
 
-                var encryptedSecret = await GetEncryptedSecretFromMicroServiceConfig();
+                var encryptedSecret = await GetEncryptedSecret();
                 if (string.IsNullOrEmpty(encryptedSecret))
                 {
                     throw new ArgumentException("Get null value from MicroserviceConfig");
                 }
 
                 var secret = GetDecryptedSecret(encryptedSecret);
-                //var identityTokenResponse = new IdentityTokenResponse
-                //{
-                //    TokenType = "Bearer",
-                //    AccessToken = secret
-                //};
 
                 var model = new AiCompletionModel();
                 var payload = model.ConstructCommand(request.Message, request.Temperature);
@@ -142,13 +140,11 @@ namespace DomainService.Services
             return null;
         }
 
-        private async Task<string> GetEncryptedSecretFromMicroServiceConfig()
+        private async Task<string> GetEncryptedSecret()
         {
-            //var config = await _blocksAssistant.GetMicroServiceConfig(x => true);
-            //return config?.ChatGptSecretKey;
-            return "ZAFbQz7AndWyzXGUY0Zr+APwf2+/2bU3jITch5B+3ALnTrpA4B1yrpKyFhlbsgDFIVLhNOG4K28XSJaLwWIjUw==";
+            return _localizationSecret.ChatGptEncryptedSecret;
         }
-
+ 
         private string GetDecryptedSecret(string encryptedText)
         {
             var salt = GetSalt();
@@ -157,17 +153,15 @@ namespace DomainService.Services
                 throw new ArgumentException("Salt is null");
             }
 
-            var decryptedValue = Decrypt(encryptedText, _key, salt);
+            var key = _localizationSecret.ChatGptEncryptionKey;
+
+            var decryptedValue = Decrypt(encryptedText, key, salt);
+            
             return decryptedValue;
         }
 
-        public byte[] GetSalt()
-        {
-            var salt = _localizationSecret.ChatGptEncryptionSalt;
-            return JsonConvert.DeserializeObject<string[]>(salt)
-                .Select(hex => Convert.ToByte(hex, 16))
-                .ToArray();
-        }
+        public byte[] GetSalt() =>
+            _configuration.GetSection("Salt").Get<byte[]>();
 
         private static void TemperatureValidator(double temperature)
         {
