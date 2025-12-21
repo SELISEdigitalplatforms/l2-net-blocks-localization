@@ -21,13 +21,6 @@ namespace XUnitTest
         private readonly AssistantService _assistantService;
         private readonly Mock<HttpMessageHandler> _handlerMock;
 
-    public AssistantServiceTests()
-    {
-        private readonly Mock<ILogger<AssistantService>> _loggerMock;
-        private readonly Mock<IConfiguration> _configurationMock;
-        private readonly Mock<ILocalizationSecret> _localizationSecretMock;
-        private readonly HttpClient _httpClient;
-        private readonly AssistantService _assistantService;
 
         public AssistantServiceTests()
         {
