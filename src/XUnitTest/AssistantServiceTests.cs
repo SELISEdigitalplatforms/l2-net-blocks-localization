@@ -234,6 +234,16 @@ namespace XUnitTest
         }
 
         [Fact]
+        public void FormatAiTextForSuggestTranslation_EmptyString_ReturnsEmpty()
+        {
+            var aiText = "";
+
+            var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
+
+            result.Should().BeEmpty();
+        }
+
+        [Fact]
         public void FormatAiTextForSuggestTranslation_WhitespaceOnly_ReturnsEmpty()
         {
             var aiText = "   ";
@@ -350,6 +360,46 @@ namespace XUnitTest
         #region Decrypt Tests
 
         [Fact]
+        public void Decrypt_WithInvalidCipher_ThrowsCryptographicException()
+        {
+            var url = "http://test.com/api/resource";
+            var content = "{\"id\": 1}";
+
+            var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Put, content);
+
+            result.Method.Should().Be(HttpMethod.Put);
+            result.RequestUri.Should().Be(new Uri(url));
+            result.Content.Should().NotBeNull();
+        }
+
+        [Fact]
+        public void PrepareHttpRequest_WithDeleteMethod_CreatesCorrectRequest()
+        {
+            var url = "http://test.com/api/resource/1";
+
+            var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Delete, null);
+
+            result.Method.Should().Be(HttpMethod.Delete);
+            result.RequestUri.Should().Be(new Uri(url));
+        }
+
+        [Fact]
+        public async Task PrepareHttpRequest_ContentType_IsApplicationJson()
+        {
+            var url = "http://test.com/api";
+            var content = "{\"key\": \"value\"}";
+
+            var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Post, content);
+
+            result.Content.Should().NotBeNull();
+            result.Content!.Headers.ContentType!.MediaType.Should().Be("application/json");
+        }
+
+        #endregion
+
+        #region Decrypt Tests
+
+        [Fact]
         public void Decrypt_ValidInput_ReturnsDecryptedText()
         {
             // Arrange
@@ -363,6 +413,30 @@ namespace XUnitTest
             // This will likely throw due to invalid encrypted data, but tests the method exists
             var act = () => AssistantService.Decrypt(encryptedText, key, salt);
             act.Should().NotThrow<NullReferenceException>();
+        }
+
+        [Fact]
+        public void Decrypt_WithInvalidBase64_ThrowsFormatException()
+        {
+            var invalidBase64 = "not-valid-base64!!!";
+            var key = "test-key";
+            var salt = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+            Action act = () => AssistantService.Decrypt(invalidBase64, key, salt);
+
+            act.Should().Throw<FormatException>();
+        }
+
+        [Fact]
+        public void Decrypt_WithEmptyKey_ThrowsException()
+        {
+            var encryptedText = "dGVzdA==";
+            var key = "";
+            var salt = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+            Action act = () => AssistantService.Decrypt(encryptedText, key, salt);
+
+            act.Should().Throw<Exception>();
         }
 
         [Fact]
