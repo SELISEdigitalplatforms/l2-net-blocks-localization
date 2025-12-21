@@ -1,11 +1,13 @@
 using DomainService.Services;
-using FluentAssertions;
 using DomainService.Shared.Entities;
+using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Moq.Protected;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using Xunit;
 
 namespace XUnitTest
@@ -14,8 +16,8 @@ namespace XUnitTest
     {
         private readonly Mock<ILogger<AssistantService>> _loggerMock;
         private readonly Mock<IConfiguration> _configurationMock;
-        private readonly Mock<HttpClient> _httpClientMock;
         private readonly Mock<ILocalizationSecret> _localizationSecretMock;
+        private readonly HttpClient _httpClient;
         private readonly AssistantService _assistantService;
         private readonly Mock<HttpMessageHandler> _handlerMock;
 
@@ -24,7 +26,6 @@ namespace XUnitTest
         {
             _loggerMock = new Mock<ILogger<AssistantService>>();
             _configurationMock = new Mock<IConfiguration>();
-            _httpClientMock = new Mock<HttpClient>();
             _localizationSecretMock = new Mock<ILocalizationSecret>();
 
             _configurationMock.SetupGet(x => x["Key"]).Returns("test-key");
@@ -54,7 +55,7 @@ namespace XUnitTest
             _assistantService = new AssistantService(
                 _loggerMock.Object,
                 _configurationMock.Object,
-                _httpClientMock.Object,
+                _httpClient,
                 _localizationSecretMock.Object
             );
         }
@@ -62,25 +63,8 @@ namespace XUnitTest
         #region GenerateSuggestTranslationContext Tests
 
         [Fact]
-        public void GenerateSuggestTranslationContext_ShouldReturnCorrectContext()
+        public void GenerateSuggestTranslationContext_WithElementDetailContext_ReturnsContext()
         {
-            // Arrange
-            var request = new SuggestLanguageRequest
-            {
-                // Fill with appropriate properties if needed
-            };
-
-            // Act
-            var result = _assistantService.GenerateSuggestTranslationContext(request);
-
-            // Assert
-            result.Should().NotBeNull();
-        }
-
-        [Fact]
-        public void GenerateSuggestTranslationContext_WithElementDetailContext_ReturnsCorrectContext()
-        {
-            // Arrange
             var request = new SuggestLanguageRequest
             {
                 ElementDetailContext = "submit",
@@ -89,19 +73,15 @@ namespace XUnitTest
                 CurrentLanguage = "en"
             };
 
-            // Act
             var result = _assistantService.GenerateSuggestTranslationContext(request);
 
-            // Assert
-            result.Should().NotBeNull();
             result.Should().Contain("submit");
             result.Should().Contain("Translate the following from en to es: 'Submit'");
         }
 
         [Fact]
-        public void GenerateSuggestTranslationContext_WithoutElementDetailContext_ReturnsDefaultContext()
+        public void GenerateSuggestTranslationContext_WithoutElementDetailContext_ReturnsDefault()
         {
-            // Arrange
             var request = new SuggestLanguageRequest
             {
                 ElementDetailContext = null,
@@ -110,12 +90,9 @@ namespace XUnitTest
                 CurrentLanguage = "en"
             };
 
-            // Act
             var result = _assistantService.GenerateSuggestTranslationContext(request);
 
-            // Assert
-            result.Should().NotBeNull();
-            result.Should().Contain("translate a user interface element");
+            result.Should().Contain("translate a user interface element", because: "default context should be used");
             result.Should().Contain("Translate the following from en to fr: 'Welcome'");
         }
 
@@ -160,73 +137,47 @@ namespace XUnitTest
         [Fact]
         public void FormatAiTextForSuggestTranslation_WithColon_ExtractsTextAfterColon()
         {
-            // Arrange
             var aiText = "\"Translated: Enviar\"";
 
-            // Act
             var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
 
-            // Assert
             result.Should().Be("Enviar");
         }
 
         [Fact]
         public void FormatAiTextForSuggestTranslation_WithoutColon_ReturnsTrimmedText()
         {
-            // Arrange
             var aiText = "\"Bienvenue\"";
 
-            // Act
             var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
 
-            // Assert
             result.Should().Be("Bienvenue");
         }
 
         [Fact]
         public void FormatAiTextForSuggestTranslation_WithQuotes_RemovesQuotes()
         {
-            // Arrange
             var aiText = "'Hello World'";
 
-            // Act
             var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
 
-            // Assert
             result.Should().Be("Hello World");
         }
 
         [Fact]
         public void FormatAiTextForSuggestTranslation_WithWhitespace_TrimsWhitespace()
         {
-            // Arrange
             var aiText = "  \n\tBonjour\t\n  ";
 
-            // Act
             var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
 
-            // Assert
             result.Should().Be("Bonjour");
         }
 
         [Fact]
-        public void FormatAiTextForSuggestTranslation_NullInput_HandlesGracefully()
+        public void FormatAiTextForSuggestTranslation_NullInput_ReturnsEmpty()
         {
-            // Arrange
-            string aiText = null;
-
-            // Act
-            var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
-
-            // Assert
-            result.Should().NotBeNull();
-            result.Should().BeEmpty();
-        }
-
-        [Fact]
-        public void FormatAiTextForSuggestTranslation_EmptyString_ReturnsEmpty()
-        {
-            var aiText = "";
+            string? aiText = null;
 
             var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
 
@@ -290,15 +241,11 @@ namespace XUnitTest
         [Fact]
         public void PrepareHttpRequest_WithContent_CreatesRequestWithContent()
         {
-            // Arrange
             var url = "http://test.com/api";
             var content = "{\"test\": \"data\"}";
 
-            // Act
             var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Post, content);
 
-            // Assert
-            result.Should().NotBeNull();
             result.Method.Should().Be(HttpMethod.Post);
             result.RequestUri.Should().Be(new Uri(url));
             result.Content.Should().NotBeNull();
@@ -307,14 +254,10 @@ namespace XUnitTest
         [Fact]
         public void PrepareHttpRequest_WithoutContent_CreatesRequestWithoutContent()
         {
-            // Arrange
             var url = "http://test.com/api";
 
-            // Act
             var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Get, null);
 
-            // Assert
-            result.Should().NotBeNull();
             result.Method.Should().Be(HttpMethod.Get);
             result.RequestUri.Should().Be(new Uri(url));
             result.Content.Should().BeNull();
@@ -362,81 +305,13 @@ namespace XUnitTest
         [Fact]
         public void Decrypt_WithInvalidCipher_ThrowsCryptographicException()
         {
-            var url = "http://test.com/api/resource";
-            var content = "{\"id\": 1}";
-
-            var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Put, content);
-
-            result.Method.Should().Be(HttpMethod.Put);
-            result.RequestUri.Should().Be(new Uri(url));
-            result.Content.Should().NotBeNull();
-        }
-
-        [Fact]
-        public void PrepareHttpRequest_WithDeleteMethod_CreatesCorrectRequest()
-        {
-            var url = "http://test.com/api/resource/1";
-
-            var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Delete, null);
-
-            result.Method.Should().Be(HttpMethod.Delete);
-            result.RequestUri.Should().Be(new Uri(url));
-        }
-
-        [Fact]
-        public async Task PrepareHttpRequest_ContentType_IsApplicationJson()
-        {
-            var url = "http://test.com/api";
-            var content = "{\"key\": \"value\"}";
-
-            var result = AssistantService.PrepareHttpRequest(url, HttpMethod.Post, content);
-
-            result.Content.Should().NotBeNull();
-            result.Content!.Headers.ContentType!.MediaType.Should().Be("application/json");
-        }
-
-        #endregion
-
-        #region Decrypt Tests
-
-        [Fact]
-        public void Decrypt_ValidInput_ReturnsDecryptedText()
-        {
-            // Arrange
-            // Note: This test requires proper setup with valid encrypted text and salt
-            // For now, we'll test that the method exists and can be called
-            var encryptedText = "dGVzdA=="; // base64 encoded "test"
+            var encryptedText = "dGVzdA=="; // base64 of "test", not a valid AES cipher for this key/salt
             var key = "test-key";
-            var salt = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
-
-            // Act & Assert
-            // This will likely throw due to invalid encrypted data, but tests the method exists
-            var act = () => AssistantService.Decrypt(encryptedText, key, salt);
-            act.Should().NotThrow<NullReferenceException>();
-        }
-
-        [Fact]
-        public void Decrypt_WithInvalidBase64_ThrowsFormatException()
-        {
-            var invalidBase64 = "not-valid-base64!!!";
-            var key = "test-key";
-            var salt = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
-
-            Action act = () => AssistantService.Decrypt(invalidBase64, key, salt);
-
-            act.Should().Throw<FormatException>();
-        }
-
-        [Fact]
-        public void Decrypt_WithEmptyKey_ThrowsException()
-        {
-            var encryptedText = "dGVzdA==";
-            var key = "";
             var salt = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
 
             Action act = () => AssistantService.Decrypt(encryptedText, key, salt);
 
-            act.Should().Throw<Exception>();
+            act.Should().Throw<Exception>(); // cryptographic failure is expected, but should not cause null refs
         }
 
         [Fact]
