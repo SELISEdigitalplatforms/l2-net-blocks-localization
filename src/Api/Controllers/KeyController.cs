@@ -235,7 +235,7 @@ namespace Api.Controllers
         /// <param name="request">The request containing key ID, project key, and translation parameters.</param>
         /// <returns>An <see cref="IActionResult"/> indicating the success or failure of the translation request.</returns>
         [HttpPost]
-        [ProtectedEndPoint]
+        [Authorize]
         public async Task<IActionResult> TranslateKey(TranslateBlocksLanguageKeyRequest request)
         {
             if (request == null) return BadRequest(new BaseMutationResponse());

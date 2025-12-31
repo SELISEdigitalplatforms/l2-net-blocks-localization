@@ -3,6 +3,7 @@ using DomainService.Repositories;
 using DomainService.Services.HelperService;
 using DomainService.Shared;
 using DomainService.Shared.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers
