@@ -517,8 +517,6 @@ The Key Timeline feature provides a complete audit trail of all changes to trans
 - **Rollback**: Revert to previous key states
 - **Analytics**: Analyze translation change patterns
 
-For detailed information, see [KEY_TIMELINE_IMPLEMENTATION_SUMMARY.md](./KEY_TIMELINE_IMPLEMENTATION_SUMMARY.md) and [KEY_TIMELINE_API_USAGE.md](./KEY_TIMELINE_API_USAGE.md).
-
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -650,12 +648,6 @@ The Dockerfile supports environment-specific builds using the `git_branch` argum
 docker build -t blocks-localization-api --build-arg git_branch=stg .
 ```
 
-## 📚 Additional Documentation
-
-- [DELETE_COLLECTIONS_API.md](./DELETE_COLLECTIONS_API.md): Detailed documentation for collection deletion API
-- [KEY_TIMELINE_API_USAGE.md](./KEY_TIMELINE_API_USAGE.md): Key Timeline API usage guide
-- [KEY_TIMELINE_IMPLEMENTATION_SUMMARY.md](./KEY_TIMELINE_IMPLEMENTATION_SUMMARY.md): Implementation details for Key Timeline feature
-
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -672,3 +664,10 @@ docker build -t blocks-localization-api --build-arg git_branch=stg .
 - Ensure all tests pass before submitting PR
 - Use meaningful commit messages
 
+## 📝 License
+
+Proprietary - SELISE Digital Platforms
+
+---
+
+**Built with ❤️ by SELISE Digital Platforms**

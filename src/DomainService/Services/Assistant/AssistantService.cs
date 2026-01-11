@@ -18,7 +18,6 @@ namespace DomainService.Services
         private readonly string _chatGptTemperature;
         private readonly HttpClient _httpClient;
         private readonly ILocalizationSecret _localizationSecret;
-
         public AssistantService(
             ILogger<AssistantService> logger,
             IConfiguration configuration,
@@ -79,18 +78,18 @@ namespace DomainService.Services
 
         public string FormatAiTextForSuggestTranslation(string aiText)
         {
-            if (aiText == null)
+            if (string.IsNullOrWhiteSpace(aiText))
             {
-                _logger.LogError("FormatAiTextForSuggestTranslation -> aiText is null");
-                return String.Empty;
+                return string.Empty;
             }
+
             string output = null;
 
             var trimmedAiText = aiText?.Replace("\"", "").Replace("'", "");
-            if (trimmedAiText.Contains(":"))
+            if (!string.IsNullOrEmpty(trimmedAiText) && trimmedAiText.Contains(":"))
             {
                 string[] parts = trimmedAiText.Split(':');
-                output = parts[1];
+                output = parts.Length > 1 ? parts[1] : trimmedAiText;
             }
             else
             {
@@ -98,7 +97,7 @@ namespace DomainService.Services
             }
 
             char[] charsToTrim = { ' ', '\t', '\n' };
-            string trimmedOutput = output.Trim(charsToTrim);
+            string trimmedOutput = output?.Trim(charsToTrim) ?? string.Empty;
 
             return trimmedOutput;
         }
@@ -147,16 +146,15 @@ namespace DomainService.Services
  
         private string GetDecryptedSecret(string encryptedText)
         {
+            var key = _localizationSecret.ChatGptEncryptionKey;
             var salt = GetSalt();
+            
             if (salt is null)
             {
                 throw new ArgumentException("Salt is null");
             }
 
-            var key = _localizationSecret.ChatGptEncryptionKey;
-
             var decryptedValue = Decrypt(encryptedText, key, salt);
-            
             return decryptedValue;
         }
 

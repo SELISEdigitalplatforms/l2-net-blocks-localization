@@ -10,77 +10,24 @@ using System.Net.Http;
 using System.Text;
 using Xunit;
 
-public class AssistantServiceTests
+namespace XUnitTest
 {
-    private readonly Mock<ILogger<AssistantService>> _loggerMock;
-    private readonly Mock<IConfiguration> _configurationMock;
-    private readonly Mock<HttpClient> _httpClientMock;
-    private readonly Mock<ILocalizationSecret> _localizationSecretMock;
-    private readonly AssistantService _assistantService;
-    private readonly HttpClient _httpClient;
-    private readonly Mock<HttpMessageHandler> _handlerMock;
-
-    public AssistantServiceTests()
+    public class AssistantServiceTests
     {
-        _loggerMock = new Mock<ILogger<AssistantService>>();
-        _configurationMock = new Mock<IConfiguration>();
-        _httpClientMock = new Mock<HttpClient>();
-        _localizationSecretMock = new Mock<ILocalizationSecret>();
-        _handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
-        _httpClient = new HttpClient(_handlerMock.Object);
+        private readonly Mock<ILogger<AssistantService>> _loggerMock;
+        private readonly Mock<IConfiguration> _configurationMock;
+        private readonly Mock<ILocalizationSecret> _localizationSecretMock;
+        private readonly HttpClient _httpClient;
+        private readonly AssistantService _assistantService;
+        private readonly Mock<HttpMessageHandler> _handlerMock;
 
 
-        _configurationMock.SetupGet(x => x["Key"]).Returns("test-key");
-        _configurationMock.SetupGet(x => x["AiCompletionUrl"]).Returns("http://test-url.com");
-        _configurationMock.SetupGet(x => x["ChatGptTemperature"]).Returns("0.7");
-
-        _assistantService = new AssistantService(
-            _loggerMock.Object,
-            _configurationMock.Object,
-            _httpClientMock.Object,
-            _localizationSecretMock.Object
-        );
-    }
-
-
-    [Fact]
-    public void GenerateSuggestTranslationContext_ShouldReturnCorrectContext()
-    {
-        // Arrange
-        var request = new SuggestLanguageRequest
+        public AssistantServiceTests()
         {
-            ElementType = "button",
-            ElementApplicationContext = "login",
-            ElementDetailContext = "submit",
-            MaxCharacterLength = 50,
-            SourceText = "Submit",
-            DestinationLanguage = "es",
-            CurrentLanguage = "en"
-        };
+            _loggerMock = new Mock<ILogger<AssistantService>>();
+            _configurationMock = new Mock<IConfiguration>();
+            _localizationSecretMock = new Mock<ILocalizationSecret>();
 
-        // Act
-        var result = _assistantService.GenerateSuggestTranslationContext(request);
-
-        // Assert
-        Assert.Contains("The requirement is to translate a user interface element of a webpage.", result);
-        Assert.Contains("Ideally,it should not exceed 50 Characters.", result);
-        Assert.Contains("The element type in question is 'button'.", result);
-        Assert.Contains("The element application context in question is 'login'.", result);
-        Assert.Contains("The element detail context in question is: 'submit'.", result);
-        Assert.Contains("translate the following from en to es:'Submit'.", result);
-    }
-
-    [Fact]
-    public void FormatAiTextForSuggestTranslation_ShouldReturnFormattedText()
-    {
-        // Arrange
-        var aiText = "\"Translated: Enviar\"";
-
-        // Act
-        var result = _assistantService.FormatAiTextForSuggestTranslation(aiText);
-
-        // Assert
-        Assert.Equal("Enviar", result);
             _configurationMock.SetupGet(x => x["Key"]).Returns("test-key");
             _configurationMock.SetupGet(x => x["AiCompletionUrl"]).Returns("http://test-url.com");
             _configurationMock.SetupGet(x => x["ChatGptTemperature"]).Returns("0.7");
@@ -91,6 +38,7 @@ public class AssistantServiceTests
                 .Returns("dummy-encrypted-secret");
 
             // Use a stubbed HttpMessageHandler so no real HTTP is performed.
+            _handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
             _handlerMock
                 .Protected()
                 .Setup<Task<HttpResponseMessage>>(
@@ -102,7 +50,14 @@ public class AssistantServiceTests
                     Content = new StringContent("{}", Encoding.UTF8, "application/json")
                 });
 
+            _httpClient = new HttpClient(_handlerMock.Object);
 
+            _assistantService = new AssistantService(
+                _loggerMock.Object,
+                _configurationMock.Object,
+                _httpClient,
+                _localizationSecretMock.Object
+            );
         }
 
         #region GenerateSuggestTranslationContext Tests
@@ -586,3 +541,4 @@ public class AssistantServiceTests
 
         #endregion
     }
+}
