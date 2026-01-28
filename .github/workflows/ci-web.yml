@@ -73,12 +73,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SELISEdigitalplatforms/blockscloud-inventory
-          token: ${{ secrets.PAT_BOT_SD }}
+          token: ${{ secrets.SELISE_GITHUB_PAT }}
           path: blockscloud-inventory
 
       - name: Update inventory and open PR
         env:
-          GH_TOKEN: ${{ secrets.PAT_BOT_SD }}
+          GH_TOKEN: ${{ secrets.SELISE_GITHUB_PAT }}
         run: |
           cd blockscloud-inventory
           git checkout main
