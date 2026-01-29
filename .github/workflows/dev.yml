@@ -71,7 +71,6 @@ jobs:
       BLOCKSOS_REPO: ${{ secrets.BLOCKSOS_REPO }}
     needs: [initialization]
 
-
   cd-job-worker-build:
     # if: ${{ github.event_name == 'push' && (needs.test-job.result == 'success' || needs.test-job.result == 'skipped') && (needs.sast-job.result == 'success' || needs.sast-job.result == 'skipped') && (needs.sca-job.result == 'success' || needs.sca-job.result == 'skipped') }}
     uses: ./.github/workflows/worker.yml
@@ -84,3 +83,11 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       BLOCKSOS_REPO: ${{ secrets.BLOCKSOS_REPO }}
     needs: [initialization]
+
+  dast-job:
+    if: ${{ github.event_name == 'push' && (success() || needs.initialization.outputs.envvalue4=='true') }}
+    uses: ./.github/workflows/4_dast.yml
+    secrets:
+      ZAP_API_KEY: ${{ secrets.ZAP_KEY }}
+      ZAP_DASHBOARD_TOKEN: ${{ secrets.ZAP_DASHBOARD_TOKEN }}
+    needs: [cd-job-build]
