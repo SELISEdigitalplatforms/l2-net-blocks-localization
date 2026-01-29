@@ -60,7 +60,7 @@ jobs:
 
   cd-job-build:
     # if: ${{ github.event_name == 'push' && (needs.test-job.result == 'success' || needs.test-job.result == 'skipped') && (needs.sast-job.result == 'success' || needs.sast-job.result == 'skipped') && (needs.sca-job.result == 'success' || needs.sca-job.result == 'skipped') }}
-    uses: ./.github/workflows/ci-api.yml
+    uses: ./.github/workflows/api.yml
     permissions:
       contents: write
     with:
@@ -71,47 +71,10 @@ jobs:
       BLOCKSOS_REPO: ${{ secrets.BLOCKSOS_REPO }}
     needs: [initialization]
 
-  prod-deploy:
-    uses: ./.github/workflows/deploy-api.yml
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      VERSION: $DEV_VERSION
-      CONTAINER_NAME: "dev-blocks-$SERVICE_NAME"
-      NAMESPACE: "dev-$REPO_NAME"
-      SERVICE_NAME: $SERVICE_NAME
-      CLUSTER_VALUES: "aks-blocks-dev"
-    secrets:
-      SELISE_GITHUB_PAT: ${{ secrets.SELISE_GITHUB_PAT }}
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_AKS_BLOCKS_CREDENTIALS }}
-      ClUSTER_RESOURCE_GROUP: ${{ secrets.ClUSTER_AKS_BLOCKS_RESOURCE_GROUP }}
-      AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_BLOCKS_CONTAINER_REGISTRY }}
-      CLUSTER_NAME: ${{ secrets.AKS_BLOCKS_DEV_CLUSTER }}
-    needs: [cd-job-build]
-
-  non-prod-deploy:
-    uses: ./.github/workflows/deploy-api.yml
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      VERSION: $DEV_VERSION
-      CONTAINER_NAME: "dev-blocks-$SERVICE_NAME"
-      NAMESPACE: "dev-$REPO_NAME"
-      SERVICE_NAME: $SERVICE_NAME
-      CLUSTER_VALUES: "aks-blocks-dev-nonprod"
-    secrets:
-      SELISE_GITHUB_PAT: ${{ secrets.SELISE_GITHUB_PAT }}
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_AKS_BLOCKS_CREDENTIALS }}
-      ClUSTER_RESOURCE_GROUP: ${{ secrets.ClUSTER_AKS_BLOCKS_RESOURCE_GROUP }}
-      AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_BLOCKS_CONTAINER_REGISTRY }}
-      CLUSTER_NAME: ${{ secrets.AKS_BLOCKS_DEV_NONPROD_CLUSTER }}
-    needs: [cd-job-build]
 
   cd-job-worker-build:
     # if: ${{ github.event_name == 'push' && (needs.test-job.result == 'success' || needs.test-job.result == 'skipped') && (needs.sast-job.result == 'success' || needs.sast-job.result == 'skipped') && (needs.sca-job.result == 'success' || needs.sca-job.result == 'skipped') }}
-    uses: ./.github/workflows/ci-worker.yml
+    uses: ./.github/workflows/worker.yml
     permissions:
       contents: write
     with:
@@ -121,39 +84,3 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       BLOCKSOS_REPO: ${{ secrets.BLOCKSOS_REPO }}
     needs: [initialization]
-
-  prod-deploy-worker:
-    uses: ./.github/workflows/deploy-worker.yml
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      CONTAINER_NAME: "dev-blocks-$SERVICE_NAME-worker"
-      NAMESPACE: "dev-$REPO_NAME"
-      SERVICE_NAME: $SERVICE_NAME
-      CLUSTER_VALUES: "aks-blocks-dev"
-    secrets:
-      SELISE_GITHUB_PAT: ${{ secrets.SELISE_GITHUB_PAT }}
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_AKS_BLOCKS_CREDENTIALS }}
-      ClUSTER_RESOURCE_GROUP: ${{ secrets.ClUSTER_AKS_BLOCKS_RESOURCE_GROUP }}
-      AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_BLOCKS_CONTAINER_REGISTRY }}
-      CLUSTER_NAME: ${{ secrets.AKS_BLOCKS_DEV_CLUSTER }}
-    needs: [cd-job-worker-build]
-
-  non-prod-deploy-worker:
-    uses: ./.github/workflows/deploy-worker.yml
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      CONTAINER_NAME: "dev-blocks-$SERVICE_NAME-worker"
-      NAMESPACE: "dev-$REPO_NAME"
-      SERVICE_NAME: $SERVICE_NAME
-      CLUSTER_VALUES: "aks-blocks-dev-nonprod"
-    secrets:
-      SELISE_GITHUB_PAT: ${{ secrets.SELISE_GITHUB_PAT }}
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_AKS_BLOCKS_CREDENTIALS }}
-      ClUSTER_RESOURCE_GROUP: ${{ secrets.ClUSTER_AKS_BLOCKS_RESOURCE_GROUP }}
-      AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_BLOCKS_CONTAINER_REGISTRY }}
-      CLUSTER_NAME: ${{ secrets.AKS_BLOCKS_DEV_NONPROD_CLUSTER }}
-    needs: [cd-job-worker-build]

@@ -31,7 +31,7 @@ jobs:
           
   cd-job-api-build:
     if: ${{ github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'dev' }}
-    uses: ./.github/workflows/ci-api.yml
+    uses: ./.github/workflows/api.yml
     permissions:
       contents: write
     with:
@@ -46,7 +46,7 @@ jobs:
 
   cd-job-worker-build:
     if: ${{ github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'dev' }}
-    uses: ./.github/workflows/ci-worker.yml
+    uses: ./.github/workflows/worker.yml
     permissions:
       contents: write
     with:
