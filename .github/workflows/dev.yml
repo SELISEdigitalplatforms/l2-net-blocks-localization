@@ -60,17 +60,15 @@ jobs:
 
   cd-job-build:
     if: ${{ github.event_name == 'push' && (needs.test-job.result == 'success' || needs.test-job.result == 'skipped') && (needs.sast-job.result == 'success' || needs.sast-job.result == 'skipped') && (needs.sca-job.result == 'success' || needs.sca-job.result == 'skipped') }}
-    uses: ./.github/workflows/build-api.yml
+    uses: ./.github/workflows/ci-api.yml
     permissions:
-      contents: read
-      id-token: write
+      contents: write
     with:
-      VERSION: $DEV_VERSION
-      CONTAINER_NAME: "dev-blocks-$SERVICE_NAME"
+      MODE: dev
     secrets:
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_AKS_BLOCKS_CREDENTIALS }}
-      AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_BLOCKS_CONTAINER_REGISTRY }}
-      ACR_RESOURCE_GROUP: ${{ secrets.ClUSTER_AKS_BLOCKS_RESOURCE_GROUP }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      BLOCKSOS_REPO: ${{ secrets.BLOCKSOS_REPO }}
     needs: [initialization]
 
   prod-deploy:
@@ -113,16 +111,15 @@ jobs:
 
   cd-job-worker-build:
     if: ${{ github.event_name == 'push' && (needs.test-job.result == 'success' || needs.test-job.result == 'skipped') && (needs.sast-job.result == 'success' || needs.sast-job.result == 'skipped') && (needs.sca-job.result == 'success' || needs.sca-job.result == 'skipped') }}
-    uses: ./.github/workflows/build-worker.yml
+    uses: ./.github/workflows/ci-worker.yml
     permissions:
-      contents: read
-      id-token: write
+      contents: write
     with:
-      CONTAINER_NAME: "dev-blocks-$SERVICE_NAME-worker"
+      MODE: dev
     secrets:
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_AKS_BLOCKS_CREDENTIALS }}
-      AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_BLOCKS_CONTAINER_REGISTRY }}
-      ACR_RESOURCE_GROUP: ${{ secrets.ClUSTER_AKS_BLOCKS_RESOURCE_GROUP }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      BLOCKSOS_REPO: ${{ secrets.BLOCKSOS_REPO }}
     needs: [initialization]
 
   prod-deploy-worker:
