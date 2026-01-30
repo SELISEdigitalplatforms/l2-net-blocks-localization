@@ -85,9 +85,23 @@ jobs:
         run: |
           METRICS_FILE="sonar-metrics.json"
           SONAR_BASE="${SONARQUBE_HOST%/}"
+          REPORT_TASK="src/.sonarqube/out/.sonar/report-task.txt"
+          CE_TASK_URL=""
+          if [ -f "${REPORT_TASK}" ]; then
+            CE_TASK_URL="$(awk -F= '/ceTaskUrl/ {print $2}' "${REPORT_TASK}" | tr -d '\r')"
+          fi
+          if [ -n "${CE_TASK_URL}" ]; then
+            for i in 1 2 3 4 5 6; do
+              CE_STATUS="$(curl -sS -u "${SONAR_TOKEN}:" "${CE_TASK_URL}" | jq -r '.task.status // empty')"
+              if [ "${CE_STATUS}" = "SUCCESS" ]; then
+                break
+              fi
+              sleep 10
+            done
+          fi
           BRANCH_QUERY="&branch=${GITHUB_REF_NAME}"
           URL="${SONAR_BASE}/api/measures/component?component=${SONAR_KEY}&metricKeys=duplicated_lines_density,duplicated_lines,duplicated_blocks,security_hotspots,security_hotspots_reviewed,security_review_rating,vulnerabilities${BRANCH_QUERY}"
-          if curl -sS -u "${SONAR_TOKEN}:" "$URL" -o "$METRICS_FILE"; then
+          if curl -sS -u "${SONAR_TOKEN}:" "${URL}" -o "${METRICS_FILE}"; then
             echo "sonar_metrics_file=${METRICS_FILE}" >> "$GITHUB_ENV"
           else
             echo "Failed to fetch SonarQube metrics from ${SONAR_BASE}" >&2

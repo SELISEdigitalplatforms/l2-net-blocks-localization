@@ -66,6 +66,7 @@ jobs:
 
           PROJECT_FILE="dtrack-project.json"
           FINDINGS_FILE="dtrack-findings.json"
+          METRICS_FILE="dtrack-metrics.json"
 
           if curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
             "${DTRACK_BASE}/api/v1/project/lookup?name=${PROJECT_NAME}&version=${PROJECT_VERSION}" \
@@ -78,30 +79,50 @@ jobs:
           if [ -n "${PROJECT_UUID}" ]; then
             for i in 1 2 3 4 5; do
               if curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
-                "${DTRACK_BASE}/api/v1/finding/project/${PROJECT_UUID}/export" \
-                -o "${FINDINGS_FILE}"; then
-                COUNT="$(jq -r '.findings | length' "${FINDINGS_FILE}" 2>/dev/null || echo 0)"
-                if [ "${COUNT}" -gt 0 ] || [ "${i}" -eq 5 ]; then
-                  echo "dtrack_findings_file=${FINDINGS_FILE}" >> "$GITHUB_ENV"
+                "${DTRACK_BASE}/api/v1/metrics/project/${PROJECT_UUID}/current" \
+                -o "${METRICS_FILE}"; then
+                CRIT="$(jq -r '.critical // empty' "${METRICS_FILE}")"
+                if [ -n "${CRIT}" ] || [ "${i}" -eq 5 ]; then
+                  echo "dtrack_metrics_file=${METRICS_FILE}" >> "$GITHUB_ENV"
                   break
                 fi
               fi
               sleep 10
             done
+            if [ ! -f "${METRICS_FILE}" ]; then
+              if curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
+                "${DTRACK_BASE}/api/v1/finding/project/${PROJECT_UUID}/export" \
+                -o "${FINDINGS_FILE}"; then
+                echo "dtrack_findings_file=${FINDINGS_FILE}" >> "$GITHUB_ENV"
+              fi
+            fi
           fi
 
       - name: SCA Summary
         if: always()
         shell: bash
         run: |
+          METRICS_FILE="${dtrack_metrics_file:-}"
           FINDINGS_FILE="${dtrack_findings_file:-}"
-          CRITICAL=0
-          HIGH=0
-          MEDIUM=0
-          LOW=0
-          UNASSIGNED=0
+          CRITICAL="n/a"
+          HIGH="n/a"
+          MEDIUM="n/a"
+          LOW="n/a"
+          UNASSIGNED="n/a"
           TOTAL="n/a"
-          if [ -n "$FINDINGS_FILE" ] && [ -f "$FINDINGS_FILE" ]; then
+          if [ -n "$METRICS_FILE" ] && [ -f "$METRICS_FILE" ]; then
+            CRITICAL="$(jq -r '.critical // "n/a"' "$METRICS_FILE")"
+            HIGH="$(jq -r '.high // "n/a"' "$METRICS_FILE")"
+            MEDIUM="$(jq -r '.medium // "n/a"' "$METRICS_FILE")"
+            LOW="$(jq -r '.low // "n/a"' "$METRICS_FILE")"
+            UNASSIGNED="$(jq -r '.unassigned // "n/a"' "$METRICS_FILE")"
+            TOTAL="$(jq -r '.findingsTotal // "n/a"' "$METRICS_FILE")"
+          elif [ -n "$FINDINGS_FILE" ] && [ -f "$FINDINGS_FILE" ]; then
+            CRITICAL=0
+            HIGH=0
+            MEDIUM=0
+            LOW=0
+            UNASSIGNED=0
             TOTAL="$(jq -r '.findings | length' "$FINDINGS_FILE" 2>/dev/null || echo 0)"
             while read -r sev; do
               case "$sev" in
