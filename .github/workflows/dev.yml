@@ -63,6 +63,7 @@ jobs:
     uses: ./.github/workflows/api.yml
     permissions:
       contents: write
+      id-token: write
     with:
       MODE: dev
     secrets:
@@ -76,6 +77,7 @@ jobs:
     uses: ./.github/workflows/worker.yml
     permissions:
       contents: write
+      id-token: write
     with:
       MODE: dev
     secrets:
