@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -82,6 +83,107 @@ jobs:
         run: |
           docker build -t "${image_name}:${image_tag}" --file "${DOCKERFILE}" --build-arg build_version="${semantic_version}" .
           docker push "${image_name}:${image_tag}"
+
+      - name: Resolve image digest
+        run: |
+          IMAGE_REF="${image_name}:${image_tag}"
+          IMAGE_DIGEST_REF=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REF}")
+          if [ -z "${IMAGE_DIGEST_REF}" ]; then
+            docker pull "${IMAGE_REF}"
+            IMAGE_DIGEST_REF=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REF}")
+          fi
+
+          if [ -z "${IMAGE_DIGEST_REF}" ]; then
+            echo "Failed to resolve image digest for ${IMAGE_REF}" >&2
+            exit 1
+          fi
+
+          echo "image_digest_ref=${IMAGE_DIGEST_REF}" >> $GITHUB_ENV
+
+      - name: Generate SBOM (syft, fallback to trivy)
+        run: |
+          SBOM_FILE="sbom-api.json"
+          SYFT_OK=0
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            -w /work \
+            anchore/syft:latest "${image_digest_ref}" -o cyclonedx-json > "${SBOM_FILE}" || SYFT_OK=$?
+
+          if [ "${SYFT_OK}" -ne 0 ]; then
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD:/work" \
+              -w /work \
+              aquasec/trivy:latest sbom --format cyclonedx --output "${SBOM_FILE}" "${image_digest_ref}"
+          fi
+
+          if [ ! -s "${SBOM_FILE}" ]; then
+            echo "SBOM generation failed for ${image_digest_ref}" >&2
+            exit 1
+          fi
+
+          echo "sbom_file=${SBOM_FILE}" >> $GITHUB_ENV
+
+      - name: Install cosign
+        id: install-cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image by digest
+        id: sign-image
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign sign --yes "${image_digest_ref}"
+
+      - name: Attach SBOM attestation
+        id: attest-sbom
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign attest --yes --type cyclonedx --predicate "${sbom_file}" "${image_digest_ref}"
+
+      - name: Verify signature
+        id: verify-signature
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${image_digest_ref}"
+
+      - name: Verify attestation
+        id: verify-attestation
+        run: |
+          cosign verify-attestation \
+            --type cyclonedx \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${image_digest_ref}"
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-api
+          path: ${{ env.sbom_file }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Image Security Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Image Security Summary (API)"
+            echo ""
+            echo "- Image: \`${image_name}:${image_tag}\`"
+            echo "- Digest: \`${image_digest_ref}\`"
+            echo "- SBOM: \`${sbom_file}\`"
+            echo "- SBOM artifact: \`sbom-api\`"
+            echo "- Cosign sign: \`${{ steps.sign-image.outcome }}\`"
+            echo "- Cosign attest: \`${{ steps.attest-sbom.outcome }}\`"
+            echo "- Verify signature: \`${{ steps.verify-signature.outcome }}\`"
+            echo "- Verify attestation: \`${{ steps.verify-attestation.outcome }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create and push tag
         run: |

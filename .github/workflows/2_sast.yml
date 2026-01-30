@@ -67,6 +67,7 @@ jobs:
           dotnet-sonarscanner end /d:sonar.login=${{ secrets.SONAR_TOKEN }}
 
       - name: SonarQube Quality Gate check
+        id: quality-gate
         uses: sonarsource/sonarqube-quality-gate-action@cb3ed20f9fec62b4c3b8ad9e77656c6adaade913 # master
         # Force to fail step after specific time.
         timeout-minutes: 5
@@ -75,3 +76,55 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ env.SONARQUBE_HOST }}
+
+      - name: Fetch SonarQube metrics
+        if: always()
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          METRICS_FILE="sonar-metrics.json"
+          SONAR_BASE="${SONARQUBE_HOST%/}"
+          URL="${SONAR_BASE}/api/measures/component?component=${SONAR_KEY}&metricKeys=duplicated_lines_density,duplicated_lines,duplicated_blocks,security_hotspots,security_hotspots_reviewed,security_review_rating,vulnerabilities"
+          if curl -sS -u "${SONAR_TOKEN}:" "$URL" -o "$METRICS_FILE"; then
+            echo "sonar_metrics_file=${METRICS_FILE}" >> "$GITHUB_ENV"
+          else
+            echo "Failed to fetch SonarQube metrics from ${SONAR_BASE}" >&2
+          fi
+
+      - name: SAST Summary
+        if: always()
+        shell: bash
+        run: |
+          METRICS_FILE="${sonar_metrics_file:-}"
+          metric_or_na() {
+            local key="$1"
+            if [ -n "$METRICS_FILE" ] && [ -f "$METRICS_FILE" ]; then
+              jq -r --arg k "$key" '.component.measures[]? | select(.metric==$k) | .value' "$METRICS_FILE" | head -n1
+            fi
+          }
+          DUP_DENSITY="$(metric_or_na duplicated_lines_density)"
+          DUP_LINES="$(metric_or_na duplicated_lines)"
+          DUP_BLOCKS="$(metric_or_na duplicated_blocks)"
+          HOTSPOTS="$(metric_or_na security_hotspots)"
+          HOTSPOTS_REVIEWED="$(metric_or_na security_hotspots_reviewed)"
+          HOTSPOT_RATING="$(metric_or_na security_review_rating)"
+          VULNS="$(metric_or_na vulnerabilities)"
+          [ -n "$DUP_DENSITY" ] || DUP_DENSITY="n/a"
+          [ -n "$DUP_LINES" ] || DUP_LINES="n/a"
+          [ -n "$DUP_BLOCKS" ] || DUP_BLOCKS="n/a"
+          [ -n "$HOTSPOTS" ] || HOTSPOTS="n/a"
+          [ -n "$HOTSPOTS_REVIEWED" ] || HOTSPOTS_REVIEWED="n/a"
+          [ -n "$HOTSPOT_RATING" ] || HOTSPOT_RATING="n/a"
+          [ -n "$VULNS" ] || VULNS="n/a"
+          {
+            echo "### SAST (SonarQube) Summary"
+            echo ""
+            echo "- Project key: \`${SONAR_KEY}\`"
+            echo "- Host: \`${SONARQUBE_HOST}\`"
+            echo "- Quality Gate step: \`${{ steps.quality-gate.outcome }}\`"
+            echo "- Duplications: density \`${DUP_DENSITY}%\`, lines \`${DUP_LINES}\`, blocks \`${DUP_BLOCKS}\`"
+            echo "- Security hotspots: \`${HOTSPOTS}\`, reviewed \`${HOTSPOTS_REVIEWED}%\`, rating \`${HOTSPOT_RATING}\`"
+            echo "- Vulnerabilities: \`${VULNS}\`"
+            echo "- Coverage report: \`coverage.xml\` (generated in \`src\`)"
+          } >> "$GITHUB_STEP_SUMMARY"

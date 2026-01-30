@@ -53,3 +53,70 @@ jobs:
           projectVersion: ${{ github.ref_name }}
           bomFilename: bom.json
           autoCreate: true
+
+      - name: Fetch Dependency-Track findings summary
+        if: always()
+        shell: bash
+        env:
+          DTRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+        run: |
+          DTRACK_BASE="https://api-dt.seliseblocks.com"
+          PROJECT_NAME="${{ github.event.repository.name }}"
+          PROJECT_VERSION="${{ github.ref_name }}"
+
+          PROJECT_FILE="dtrack-project.json"
+          FINDINGS_FILE="dtrack-findings.json"
+
+          if curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
+            "${DTRACK_BASE}/api/v1/project/lookup?name=${PROJECT_NAME}&version=${PROJECT_VERSION}" \
+            -o "${PROJECT_FILE}"; then
+            PROJECT_UUID="$(jq -r '.uuid // empty' "${PROJECT_FILE}")"
+          else
+            PROJECT_UUID=""
+          fi
+
+          if [ -n "${PROJECT_UUID}" ]; then
+            if curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
+              "${DTRACK_BASE}/api/v1/finding/project/${PROJECT_UUID}/export" \
+              -o "${FINDINGS_FILE}"; then
+              echo "dtrack_findings_file=${FINDINGS_FILE}" >> "$GITHUB_ENV"
+            fi
+          fi
+
+      - name: SCA Summary
+        if: always()
+        shell: bash
+        run: |
+          FINDINGS_FILE="${dtrack_findings_file:-}"
+          CRITICAL=0
+          HIGH=0
+          MEDIUM=0
+          LOW=0
+          UNASSIGNED=0
+          TOTAL="n/a"
+          if [ -n "$FINDINGS_FILE" ] && [ -f "$FINDINGS_FILE" ]; then
+            TOTAL="$(jq -r '.findings | length' "$FINDINGS_FILE" 2>/dev/null || echo 0)"
+            while read -r sev; do
+              case "$sev" in
+                CRITICAL) CRITICAL=$((CRITICAL+1)) ;;
+                HIGH) HIGH=$((HIGH+1)) ;;
+                MEDIUM) MEDIUM=$((MEDIUM+1)) ;;
+                LOW) LOW=$((LOW+1)) ;;
+                UNASSIGNED|UNKNOWN|"") UNASSIGNED=$((UNASSIGNED+1)) ;;
+              esac
+            done < <(jq -r '.findings[]? | (.severity // .vulnerability.severity // .analysis.severity // empty) | ascii_upcase' "$FINDINGS_FILE")
+          fi
+          {
+            echo "### SCA Summary"
+            echo ""
+            echo "- SBOM: \`bom.json\` (CycloneDX JSON)"
+            echo "- Artifact: \`sbom-cyclonedx-json\`"
+            echo "- Dependency-Track project: \`${{ github.event.repository.name }}\`"
+            echo "- Project version: \`${{ github.ref_name }}\`"
+            if [ -f "bom.json" ]; then
+              echo "- SBOM size: \`$(wc -c < bom.json) bytes\`"
+            else
+              echo "- SBOM size: \`not found\`"
+            fi
+            echo "- Vulnerabilities: critical \`${CRITICAL}\`, high \`${HIGH}\`, medium \`${MEDIUM}\`, low \`${LOW}\`, unassigned \`${UNASSIGNED}\` (total \`${TOTAL}\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
