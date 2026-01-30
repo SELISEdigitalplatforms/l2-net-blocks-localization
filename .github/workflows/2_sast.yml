@@ -85,7 +85,8 @@ jobs:
         run: |
           METRICS_FILE="sonar-metrics.json"
           SONAR_BASE="${SONARQUBE_HOST%/}"
-          URL="${SONAR_BASE}/api/measures/component?component=${SONAR_KEY}&metricKeys=duplicated_lines_density,duplicated_lines,duplicated_blocks,security_hotspots,security_hotspots_reviewed,security_review_rating,vulnerabilities"
+          BRANCH_QUERY="&branch=${GITHUB_REF_NAME}"
+          URL="${SONAR_BASE}/api/measures/component?component=${SONAR_KEY}&metricKeys=duplicated_lines_density,duplicated_lines,duplicated_blocks,security_hotspots,security_hotspots_reviewed,security_review_rating,vulnerabilities${BRANCH_QUERY}"
           if curl -sS -u "${SONAR_TOKEN}:" "$URL" -o "$METRICS_FILE"; then
             echo "sonar_metrics_file=${METRICS_FILE}" >> "$GITHUB_ENV"
           else

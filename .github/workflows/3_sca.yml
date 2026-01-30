@@ -76,11 +76,18 @@ jobs:
           fi
 
           if [ -n "${PROJECT_UUID}" ]; then
-            if curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
-              "${DTRACK_BASE}/api/v1/finding/project/${PROJECT_UUID}/export" \
-              -o "${FINDINGS_FILE}"; then
-              echo "dtrack_findings_file=${FINDINGS_FILE}" >> "$GITHUB_ENV"
-            fi
+            for i in 1 2 3 4 5; do
+              if curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
+                "${DTRACK_BASE}/api/v1/finding/project/${PROJECT_UUID}/export" \
+                -o "${FINDINGS_FILE}"; then
+                COUNT="$(jq -r '.findings | length' "${FINDINGS_FILE}" 2>/dev/null || echo 0)"
+                if [ "${COUNT}" -gt 0 ] || [ "${i}" -eq 5 ]; then
+                  echo "dtrack_findings_file=${FINDINGS_FILE}" >> "$GITHUB_ENV"
+                  break
+                fi
+              fi
+              sleep 10
+            done
           fi
 
       - name: SCA Summary
