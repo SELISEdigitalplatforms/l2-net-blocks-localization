@@ -146,7 +146,7 @@ jobs:
       - name: Verify signature
         id: verify-signature
         run: |
-          cosign verify \
+          timeout 120s cosign verify \
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/.*" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${image_digest_ref}"
@@ -154,7 +154,7 @@ jobs:
       - name: Verify attestation
         id: verify-attestation
         run: |
-          cosign verify-attestation \
+          timeout 120s cosign verify-attestation \
             --type cyclonedx \
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/.*" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
