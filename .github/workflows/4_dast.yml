@@ -19,6 +19,9 @@ jobs:
       REPORT_FILE: "zap-report.xml"
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Access target URL
         run: |
           echo "Accessing target URL to populate ZAP session..."
