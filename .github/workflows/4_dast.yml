@@ -57,9 +57,10 @@ jobs:
       - name: Compute ZAP severity counts
         if: always()
         shell: bash
+        working-directory: .github/scripts
         run: |
           if [ -f "$REPORT_FILE" ]; then
-            python .github/scripts/compute_zap_severity.py "$REPORT_FILE"
+            python compute_zap_severity.py "$REPORT_FILE"
             cat zap-severity.env >> "$GITHUB_ENV"
           fi
 
