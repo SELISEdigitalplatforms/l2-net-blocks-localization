@@ -122,8 +122,8 @@ jobs:
 
           # Polling for metrics (Dependency-Track takes time to process the SBOM)
           # We check if 'lastOccurrence' exists and is not null
-          for i in {1..10}; do
-            echo "Checking metrics (Attempt $i/10)..."
+          for i in {1..30}; do
+            echo "Checking metrics (Attempt $i/30)..."
             METRICS_JSON=$(curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" "${DTRACK_BASE}/api/v1/metrics/project/${PROJECT_UUID}/current")
             
             # Check if metrics are actually populated (critical is a good indicator)
@@ -222,10 +222,10 @@ jobs:
             echo ""
             echo "| Severity | Count |"
             echo "| :--- | :--- |"
-            echo "| 🔴 Critical | **${CRITICAL}** |"
-            echo "| 🟠 High | **${HIGH}** |"
-            echo "| 🟡 Medium | **${MEDIUM}** |"
-            echo "| 🔵 Low | **${LOW}** |"
-            echo "| ⚪ Unassigned | **${UNASSIGNED}** |"
+            echo "| Critical | **${CRITICAL}** |"
+            echo "| High | **${HIGH}** |"
+            echo "| Medium | **${MEDIUM}** |"
+            echo "| Low | **${LOW}** |"
+            echo "| Unassigned | **${UNASSIGNED}** |"
             echo "| **Total** | **${TOTAL}** |"
           } >> "$GITHUB_STEP_SUMMARY"
