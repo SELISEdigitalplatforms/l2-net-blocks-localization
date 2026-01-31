@@ -15,7 +15,7 @@ jobs:
     env:
       ZAP_API: "https://zapscan.seliselocal.com"
       ZAP_KEY: ${{ secrets.ZAP_API_KEY }}
-      TARGET: "https://dev-api.seliseblocks.com"
+      TARGET: "https://clm.seliselocal.com"
       REPORT_FILE: "zap-report.xml"
 
     steps:
@@ -60,11 +60,19 @@ jobs:
       - name: Compute ZAP severity counts
         if: always()
         shell: bash
-        working-directory: .github/scripts
         run: |
           if [ -f "$REPORT_FILE" ]; then
-            python compute_zap_severity.py "$REPORT_FILE"
+            echo "Report found, computing severities..."
+            python .github/scripts/compute_zap_severity.py "$REPORT_FILE"
             cat zap-severity.env >> "$GITHUB_ENV"
+            if [ -f "zap-severity.env" ]; then
+              cat zap-severity.env >> "$GITHUB_ENV"
+              echo "Severity counts added to GITHUB_ENV"
+            else
+              echo "Error: zap-severity.env was not created"
+            fi
+          else
+            echo "Error: $REPORT_FILE not found in $(pwd)"
           fi
 
       - name: Upload Report Artifact
