@@ -4,6 +4,8 @@ on:
     secrets:
       SONAR_TOKEN:
         required: true
+      SONAR_GET:
+        required: true
 permissions:
   contents: read
   checks: write
